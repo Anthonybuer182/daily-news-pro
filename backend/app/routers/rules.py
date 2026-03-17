@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import Rule, RuleLevel
+from app.models import Rule, RuleLevel, Job
 from app.schemas import Rule as RuleSchema, RuleCreate, RuleUpdate
 from app.schemas import RuleLevel as RuleLevelSchema, RuleLevelCreate, RuleLevelUpdate
+from app.services.crawler import CrawlerEngine
+from datetime import datetime
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
@@ -72,6 +74,38 @@ def disable_rule(rule_id: int, db: Session = Depends(get_db)):
     db_rule.status = "disabled"
     db.commit()
     return {"message": "Rule disabled"}
+
+
+@router.post("/{rule_id}/run")
+async def run_rule(rule_id: int, db: Session = Depends(get_db)):
+    """Trigger a crawl task for a rule"""
+    db_rule = db.query(Rule).filter(Rule.id == rule_id).first()
+    if not db_rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    # Create job
+    job = Job(
+        rule_id=rule_id,
+        trigger_type="manual",
+        status="running",
+        started_at=datetime.utcnow()
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Run crawler asynchronously
+    try:
+        engine = CrawlerEngine(db, job.id)
+        await engine.crawl_rule(rule_id)
+    except Exception as e:
+        job.status = "failed"
+        job.error_message = str(e)
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"job_id": job.id, "status": job.status}
 
 
 # Level endpoints

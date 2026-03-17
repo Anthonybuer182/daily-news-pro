@@ -24,16 +24,62 @@ class PlaywrightCrawler:
 
     async def __aenter__(self):
         self.playwright = await async_playwright().start()
-        browser_type = self.playwright.chromium
+
+        # 增强反检测配置
+        default_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        # 先尝试Chromium - 增强反检测
         launch_options = {
             "headless": True,
+            "args": [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-web-security",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--window-size=1920,1080",
+                "--start-maximized",
+                # 模拟真实浏览器
+                "--disable-extensions",
+                "--disable-plugins",
+                "--disable-default-apps",
+                "--disable-background-networking",
+                "--disable-default-fonts",
+                "--disable-sync",
+                "--metrics-recording-only",
+                "--mute-audio",
+                "--no-first-run",
+            ],
+            "ignore_default_args": ["--enable-automation", "--headless"],
         }
-        if self.user_agent:
-            launch_options["user_agent"] = self.user_agent
+        # 使用默认User-Agent避免被检测
+        launch_options["user_agent"] = self.user_agent or default_ua
+
         if self.proxy:
             launch_options["proxy"] = {"server": self.proxy}
 
-        self.browser = await browser_type.launch(**launch_options)
+        try:
+            browser_type = self.playwright.chromium
+            self.browser = await browser_type.launch(**launch_options)
+        except Exception as e:
+            # 如果启动失败，尝试使用Firefox（不使用user_agent参数）
+            try:
+                launch_options_ff = {
+                    "headless": True,
+                    "args": [
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                    ],
+                }
+                browser_type = self.playwright.firefox
+                self.browser = await browser_type.launch(**launch_options_ff)
+            except:
+                # 如果Firefox也失败，抛出异常让调用方处理
+                if self.playwright:
+                    await self.playwright.stop()
+                raise RuntimeError(f"Failed to launch browser: {e}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -47,11 +93,36 @@ class PlaywrightCrawler:
         if not self.browser:
             raise RuntimeError("Browser not initialized")
 
-        context = await self.browser.new_context()
+        # 设置视口和上下文
+        context = await self.browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent=self.user_agent or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="zh-CN",
+            timezone_id="Asia/Shanghai",
+        )
         page = await context.new_page()
 
+        # 添加反检测脚本
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            window.navigator.chrome = {
+                runtime: {}
+            };
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['zh-CN', 'zh', 'en']
+            });
+        """)
+
         try:
-            await page.goto(url, wait_until="networkidle", timeout=30000)
+            # 增加超时时间到60秒，使用 wait_until: "domcontentloaded" 更快
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            # 等待页面稳定
+            await page.wait_for_load_state("networkidle", timeout=30000)
             await self._random_delay()
             html = await page.content()
             return html

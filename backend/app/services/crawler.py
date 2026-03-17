@@ -66,8 +66,15 @@ class CrawlerEngine:
 
         for level in levels:
             if level.is_final:
-                # Final level: extract content
-                return await self._extract_articles(current_urls)
+                # Final level: first extract links using level's selector, then extract content
+                if level.link_selector:
+                    # Extract links from current URLs using level's selector
+                    final_urls = await self._extract_links(current_urls, level)
+                    self._log("info", f"Final level extracted {len(final_urls)} links")
+                    return await self._extract_articles(final_urls)
+                else:
+                    # No selector, just extract from current URLs
+                    return await self._extract_articles(current_urls)
             else:
                 # Intermediate level: extract links
                 current_urls = await self._extract_links(current_urls, level)
@@ -90,25 +97,29 @@ class CrawlerEngine:
         """Extract links from pages"""
         all_links = []
 
-        async with PlaywrightCrawler(
-            user_agent=self.rule.user_agent,
-            delay_min=self.rule.delay_min,
-            delay_max=self.rule.delay_max,
-        ) as crawler:
+        # Use httpx for link extraction if not playwright
+        if self.rule.crawl_method == "playwright":
+            async with PlaywrightCrawler(
+                user_agent=self.rule.user_agent,
+                delay_min=self.rule.delay_min,
+                delay_max=self.rule.delay_max,
+            ) as crawler:
+                html = await self._fetch_with_method(urls[0], crawler)
+                if html:
+                    all_links = self._extract_links_from_html(html, urls[0], level)
+        elif self.rule.crawl_method == "github":
+            # GitHub API returns JSON
+            for url in urls:
+                all_links.extend(self._extract_links_from_github_api(url))
+        else:
+            # Use httpx
             for url in urls:
                 self._log("info", f"Extracting links from: {url}")
-
-                # Get page content
-                html = await crawler.fetch(url)
+                html = self._fetch_with_httpx(url)
                 if not html:
                     continue
 
-                # Apply pagination if configured
-                if level and level.pagination_type != "none":
-                    paginated_links = await self._handle_pagination(crawler, url, level)
-                    all_links.extend(paginated_links)
-
-                # Extract links using selector
+                # Extract links
                 if level and level.link_selector:
                     selector = level.link_selector
                     selector_type = level.selector_type or "css"
@@ -120,6 +131,19 @@ class CrawlerEngine:
                         links = SelectorParser.extract_links_xpath(html, selector, base_url)
                     elif selector_type == "regex":
                         links = SelectorParser.extract_by_regex(html, selector)
+                    elif selector_type == "rss" or selector == "link":
+                        # Special handling for RSS feeds - extract from <link> tags
+                        links = []
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(html, 'xml')
+                        for link in soup.find_all('link'):
+                            text = link.get_text()
+                            if text and text.startswith('http'):
+                                links.append(text)
+                        for guid in soup.find_all('guid'):
+                            text = guid.get_text()
+                            if text and text.startswith('http'):
+                                links.append(text)
                     else:
                         links = []
 
@@ -127,14 +151,45 @@ class CrawlerEngine:
                 else:
                     # Default: extract all article links
                     from bs4 import BeautifulSoup
+
+                    # Try HTML parser first
                     soup = BeautifulSoup(html, 'lxml')
-                    for a in soup.find_all('a', href=True):
-                        href = a['href']
-                        if href.startswith('http'):
+                    links_found = soup.find_all('a', href=True)
+
+                    # If no links found, try XML parser (for RSS content)
+                    if not links_found:
+                        try:
+                            soup = BeautifulSoup(html, 'xml')
+                            # For RSS, extract from <link> tags
+                            for link in soup.find_all('link'):
+                                text = link.get_text()
+                                if text and text.startswith('http'):
+                                    all_links.append(text)
+                            # Also check for <a> tags
+                            for link in soup.find_all('a', href=True):
+                                href = link.get('href')
+                                if href and href.startswith('http'):
+                                    all_links.append(href)
+                        except:
+                            pass
+
+                    # Last resort: regex
+                    if not all_links:
+                        import re
+                        all_links = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', html)
+
+                    for href in links_found:
+                        href = href.get('href') if hasattr(href, 'get') else href
+                        if href and href.startswith('http'):
                             all_links.append(href)
 
         # Filter and deduplicate
-        all_links = self._filter_links(all_links)
+        # For intermediate levels (not final), only apply exclude_patterns, skip detail_url_pattern
+        if level and not level.is_final:
+            # Only apply exclude_patterns filtering for intermediate levels
+            all_links = self._filter_links(all_links, apply_detail_pattern=False)
+        else:
+            all_links = self._filter_links(all_links)
 
         self._log("info", f"Extracted {len(all_links)} links")
         return all_links
@@ -196,10 +251,13 @@ class CrawlerEngine:
             self._log("info", f"Article already exists: {url}")
             return existing
 
-        html = None
+        # Special handling for GitHub repositories
+        if self.rule.crawl_method == "github":
+            return await self._extract_github_repo(url)
 
         # Fetch based on method
-        if self.rule.crawl_method == "playwright" or self.rule.crawl_method == "hybrid":
+        html = None
+        if self.rule.crawl_method == "playwright":
             async with PlaywrightCrawler(
                 user_agent=self.rule.user_agent,
                 delay_min=self.rule.delay_min,
@@ -207,7 +265,7 @@ class CrawlerEngine:
             ) as crawler:
                 html = await crawler.fetch(url)
 
-        if not html and self.rule.crawl_method != "playwright":
+        if not html and self.rule.crawl_method in ["httpx", "hybrid"]:
             import httpx
             headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
             response = httpx.get(url, headers=headers, timeout=30)
@@ -216,8 +274,9 @@ class CrawlerEngine:
         if not html:
             raise ValueError(f"Failed to fetch: {url}")
 
-        # Extract content
-        if self.rule.crawl_method == "trafilatura" or self.rule.crawl_method == "hybrid":
+        # Extract content - use trafilatura for better extraction
+        if self.rule.crawl_method in ["trafilatura", "hybrid"] or self.rule.title_selector is None:
+            # If no custom selectors configured, use trafilatura for better results
             content = TrafilaturaExtractor.extract_with_fallback(html)
         else:
             content = await self._extract_with_selectors(html)
@@ -275,6 +334,74 @@ class CrawlerEngine:
 
         return result
 
+    async def _extract_github_repo(self, url: str) -> Optional[Article]:
+        """Extract GitHub repository information using API"""
+        import httpx
+
+        # Convert URL to API URL
+        # https://github.com/user/repo -> https://api.github.com/repos/user/repo
+        api_url = url.replace("https://github.com/", "https://api.github.com/repos/")
+
+        try:
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": self.rule.user_agent or "DailyNewsCrawler"
+            }
+            response = httpx.get(api_url, headers=headers, timeout=30)
+            data = response.json()
+
+            if response.status_code != 200:
+                self._log("error", f"GitHub API error: {data.get('message', 'Unknown')}")
+                return None
+
+            # Extract repo info
+            content = {
+                "title": data.get("name", ""),
+                "text": data.get("description", "") or "",
+                "author": data.get("owner", {}).get("login", ""),
+                "date": data.get("created_at", ""),
+                "image": data.get("owner", {}).get("avatar_url", ""),
+            }
+
+            # Add more details
+            details = f"""
+**Stars**: {data.get("stargazers_count", 0)}
+**Forks**: {data.get("forks_count", 0)}
+**Language**: {data.get("language", "Unknown")}
+**License**: {data.get("license", {}).get("name", "None") if data.get("license") else "None"}
+**Topics**: {", ".join(data.get("topics", []))}
+
+[View on GitHub]({url})
+"""
+            content["text"] = details + "\n\n" + content.get("text", "")
+
+            # Generate markdown
+            markdown_content = self._generate_markdown(content, url)
+            markdown_file = self._save_markdown(markdown_content, url)
+
+            # Create article record
+            article = Article(
+                rule_id=self.rule.id,
+                url=url,
+                title=content.get("title"),
+                summary=content.get("text", "")[:500] if content.get("text") else None,
+                author=content.get("author"),
+                publish_time=self._parse_date(content.get("date")),
+                cover_image=content.get("image"),
+                markdown_file=markdown_file,
+                status="success",
+            )
+
+            self.db.add(article)
+            self.db.commit()
+
+            self._log("info", f"Extracted GitHub repo: {content.get('title')}")
+            return article
+
+        except Exception as e:
+            self._log("error", f"Failed to extract GitHub repo {url}: {e}")
+            return None
+
     def _generate_markdown(self, content: Dict, url: str) -> str:
         """Generate Markdown from content"""
         lines = []
@@ -315,8 +442,10 @@ class CrawlerEngine:
 
         return filepath
 
-    def _filter_links(self, links: List[str]) -> List[str]:
+    def _filter_links(self, links: List[str], apply_detail_pattern: bool = True) -> List[str]:
         """Filter and deduplicate links"""
+        import re
+
         # Remove duplicates while preserving order
         seen = set()
         filtered = []
@@ -330,12 +459,23 @@ class CrawlerEngine:
             except:
                 pass
 
+        # Get detail URL pattern for positive matching
+        detail_url_pattern = self.rule.detail_url_pattern
+
         for link in links:
             # Skip duplicates
             if link in seen:
                 continue
 
-            # Check exclude patterns
+            # Check detail URL pattern (positive filter)
+            if apply_detail_pattern and detail_url_pattern:
+                try:
+                    if not re.match(detail_url_pattern, link):
+                        continue
+                except re.error:
+                    pass  # If regex is invalid, skip this filter
+
+            # Check exclude patterns (negative filter)
             skip = False
             for pattern in exclude_patterns:
                 if pattern.replace("*", "") in link:
@@ -369,6 +509,122 @@ class CrawlerEngine:
                 continue
 
         return None
+
+    async def _fetch_with_method(self, url: str, crawler) -> Optional[str]:
+        """Fetch using specified method (playwright or httpx)"""
+        return await crawler.fetch(url)
+
+    def _fetch_with_httpx(self, url: str) -> Optional[str]:
+        """Fetch using httpx"""
+        import httpx
+        headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
+        try:
+            response = httpx.get(url, headers=headers, timeout=30)
+            return response.text
+        except Exception as e:
+            self._log("error", f"Failed to fetch {url}: {e}")
+            return None
+
+    def _extract_links_from_html(self, html: str, url: str, level: Optional[RuleLevel]) -> List[str]:
+        """Extract links from HTML"""
+        links = []
+
+        # Apply pagination if configured
+        # Skip for simplicity
+
+        # Extract links using selector
+        if level and level.link_selector:
+            selector = level.link_selector
+            selector_type = level.selector_type or "css"
+            base_url = url
+
+            if selector_type == "css":
+                links = SelectorParser.extract_links_css(html, selector, base_url)
+            elif selector_type == "xpath":
+                links = SelectorParser.extract_links_xpath(html, selector, base_url)
+            elif selector_type == "regex":
+                links = SelectorParser.extract_by_regex(html, selector)
+            elif selector_type == "rss" or selector == "link":
+                # Special handling for RSS feeds - extract from <link> tags
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, 'xml')
+                for link in soup.find_all('link'):
+                    text = link.get_text()
+                    if text and text.startswith('http'):
+                        links.append(text)
+                for guid in soup.find_all('guid'):
+                    text = guid.get_text()
+                    if text and text.startswith('http'):
+                        links.append(text)
+        else:
+            # Default: extract all article links
+            # For JavaScript-rendered content (Playwright), try regex first
+            import re
+            # Try to find all /p/XXX patterns first (common for news sites)
+            article_paths = re.findall(r'(https?://[^\s"\')]+/p/\d+[^\s"\')]*)', html)
+            links.extend(article_paths)
+
+            # Also try BeautifulSoup as fallback
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, 'lxml')
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if href.startswith('http'):
+                    links.append(href)
+
+        return list(set(links))  # Deduplicate
+
+    def _extract_links_from_github_api(self, url: str) -> List[str]:
+        """Extract repository links from GitHub API JSON response"""
+        links = []
+        try:
+            import httpx
+            from datetime import datetime, timedelta
+
+            # Auto-calculate date for dynamic queries
+            # Replace {{days_ago}} with date from N days ago
+            if "{{days_ago}}" in url:
+                days = 7  # default: last 7 days
+                # Try to extract number from url like "created:>{{days_ago}}"
+                import re
+                match = re.search(r'created:>(\d+)', url)
+                if match:
+                    days = int(match.group(1))
+
+                date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                url = url.replace("{{days_ago}}", date)
+                self._log("info", f"Using date: {date} for GitHub query")
+
+            headers = {"Accept": "application/vnd.github.v3+json"}
+            if self.rule.user_agent:
+                headers["User-Agent"] = self.rule.user_agent
+
+            response = httpx.get(url, headers=headers, timeout=30)
+            data = response.json()
+
+            # Handle rate limiting
+            if isinstance(data, dict) and "message" in data:
+                if "rate limit" in data["message"].lower():
+                    self._log("error", "GitHub API rate limit exceeded")
+                else:
+                    self._log("error", f"GitHub API error: {data['message']}")
+                return []
+
+            # Handle search results
+            if "items" in data:
+                for item in data["items"]:
+                    links.append(item.get("html_url", ""))
+            # Handle user's repos
+            elif isinstance(data, list):
+                for repo in data:
+                    links.append(repo.get("html_url", ""))
+
+            self._log("info", f"Extracted {len(links)} GitHub repos")
+
+        except Exception as e:
+            self._log("error", f"GitHub API error: {e}")
+
+        return links
 
     def _log(self, level: str, message: str):
         """Add log entry"""
