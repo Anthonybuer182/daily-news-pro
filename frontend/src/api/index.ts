@@ -11,6 +11,7 @@ export const getRule = (id: number) => api.get(`/rules/${id}`)
 export const createRule = (data: any) => api.post('/rules', data)
 export const updateRule = (id: number, data: any) => api.put(`/rules/${id}`, data)
 export const deleteRule = (id: number) => api.delete(`/rules/${id}`)
+export const batchDeleteRules = (ids: number[]) => api.post('/rules/batch-delete', { ids })
 export const enableRule = (id: number) => api.post(`/rules/${id}/enable`)
 export const disableRule = (id: number) => api.post(`/rules/${id}/disable`)
 export const getRuleLevels = (id: number) => api.get(`/rules/${id}/levels`)
@@ -23,12 +24,14 @@ export const analyzePage = (url: string, type: string) => api.post('/rules/analy
 export const getJobs = (params?: any) => api.get('/jobs', { params })
 export const getJob = (id: number) => api.get(`/jobs/${id}`)
 export const createJob = (data: any) => api.post('/jobs', data)
+export const batchDeleteJobs = (ids: number[]) => api.post('/jobs/batch-delete', { ids })
 
 // Articles
 export const getArticles = (params?: any) => api.get('/articles', { params })
 export const getArticle = (id: number) => api.get(`/articles/${id}`)
 export const getArticleMarkdown = (id: number) => api.get(`/articles/${id}/markdown`)
 export const deleteArticle = (id: number) => api.delete(`/articles/${id}`)
+export const batchDeleteArticles = (ids: number[]) => api.post('/articles/batch-delete', { ids })
 
 // Preview
 export const previewCrawl = (url: string, ruleId?: number) => api.post('/preview', { url, rule_id: ruleId })

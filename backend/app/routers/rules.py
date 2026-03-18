@@ -56,6 +56,19 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db)):
     return {"message": "Rule deleted"}
 
 
+@router.post("/batch-delete")
+def batch_delete_rules(ids: List[int], db: Session = Depends(get_db)):
+    """批量删除规则"""
+    deleted_count = 0
+    for rule_id in ids:
+        db_rule = db.query(Rule).filter(Rule.id == rule_id).first()
+        if db_rule:
+            db.delete(db_rule)
+            deleted_count += 1
+    db.commit()
+    return {"message": f"Deleted {deleted_count} rules", "deleted_count": deleted_count}
+
+
 @router.post("/{rule_id}/enable")
 def enable_rule(rule_id: int, db: Session = Depends(get_db)):
     db_rule = db.query(Rule).filter(Rule.id == rule_id).first()

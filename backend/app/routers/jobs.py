@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import datetime
 from app.database import get_db
 from app.models import Job
 from app.schemas import Job as JobSchema, JobCreate, JobUpdate
+from pydantic import BaseModel
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: List[int]
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -17,12 +22,18 @@ def get_jobs(
     status: str = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Job)
+    query = db.query(Job).options(joinedload(Job.rule))
     if rule_id:
         query = query.filter(Job.rule_id == rule_id)
     if status:
         query = query.filter(Job.status == status)
     jobs = query.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
+
+    # Add rule_name to each job
+    for job in jobs:
+        if job.rule:
+            job.rule_name = job.rule.name
+
     return jobs
 
 
@@ -57,3 +68,16 @@ def update_job(job_id: int, job_update: JobUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(db_job)
     return db_job
+
+
+@router.post("/batch-delete")
+def batch_delete_jobs(request: BatchDeleteRequest, db: Session = Depends(get_db)):
+    """批量删除任务"""
+    deleted_count = 0
+    for job_id in request.ids:
+        db_job = db.query(Job).filter(Job.id == job_id).first()
+        if db_job:
+            db.delete(db_job)
+            deleted_count += 1
+    db.commit()
+    return {"message": f"Deleted {deleted_count} jobs", "deleted_count": deleted_count}

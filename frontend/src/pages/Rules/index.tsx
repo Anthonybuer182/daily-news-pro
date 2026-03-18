@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Tag, message, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons'
-import { getRules, deleteRule, enableRule, disableRule, createJob } from '../../api'
+import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
+import { getRules, deleteRule, enableRule, disableRule, createJob, batchDeleteRules } from '../../api'
 import RuleModal from './RuleModal'
 
 export default function Rules() {
@@ -9,6 +9,7 @@ export default function Rules() {
   const [rules, setRules] = useState([])
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
 
   useEffect(() => {
     loadRules()
@@ -33,6 +34,18 @@ export default function Rules() {
       loadRules()
     } catch (error) {
       message.error('删除失败')
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchDeleteRules(selectedRowKeys)
+      message.success(`成功删除 ${selectedRowKeys.length} 条规则`)
+      setSelectedRowKeys([])
+      loadRules()
+    } catch (error) {
+      message.error('批量删除失败')
     }
   }
 
@@ -109,8 +122,24 @@ export default function Rules() {
         }}>
           新建规则
         </Button>
+        {selectedRowKeys.length > 0 && (
+          <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条规则吗?`} onConfirm={handleBatchDelete}>
+            <Button danger icon={<BatchDeleteOutlined />} style={{ marginLeft: 8 }}>
+              批量删除 ({selectedRowKeys.length})
+            </Button>
+          </Popconfirm>
+        )}
       </div>
-      <Table columns={columns} dataSource={rules} rowKey="id" loading={loading} />
+      <Table
+        columns={columns}
+        dataSource={rules}
+        rowKey="id"
+        loading={loading}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys: number[]) => setSelectedRowKeys(keys),
+        }}
+      />
       <RuleModal
         visible={modalVisible}
         rule={editingRule}

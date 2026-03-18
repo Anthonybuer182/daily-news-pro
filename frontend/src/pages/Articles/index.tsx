@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Card, Button, Modal, message } from 'antd'
-import { EyeOutlined } from '@ant-design/icons'
-import { getArticles, getArticleMarkdown } from '../../api'
+import { Table, Tag, Card, Button, Modal, message, Popconfirm } from 'antd'
+import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
+import { getArticles, getArticleMarkdown, batchDeleteArticles } from '../../api'
 import dayjs from 'dayjs'
 
 export default function Articles() {
@@ -9,6 +9,7 @@ export default function Articles() {
   const [articles, setArticles] = useState([])
   const [previewVisible, setPreviewVisible] = useState(false)
   const [markdown, setMarkdown] = useState('')
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
 
   useEffect(() => {
     loadArticles()
@@ -36,6 +37,18 @@ export default function Articles() {
     }
   }
 
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchDeleteArticles(selectedRowKeys)
+      message.success(`成功删除 ${selectedRowKeys.length} 篇文章`)
+      setSelectedRowKeys([])
+      loadArticles()
+    } catch (error) {
+      message.error('批量删除失败')
+    }
+  }
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       success: 'green',
@@ -45,9 +58,31 @@ export default function Articles() {
     return colors[status] || 'default'
   }
 
+  const getSourceTypeTag = (type: string) => {
+    const tagMap: Record<string, { color: string; text: string }> = {
+      rss: { color: 'orange', text: 'RSS' },
+      api: { color: 'blue', text: 'API' },
+      playwright: { color: 'green', text: '网页抓取' },
+    }
+    const tag = tagMap[type] || { color: 'default', text: type || '-' }
+    return <Tag color={tag.color}>{tag.text}</Tag>
+  }
+
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+    { title: '封面', dataIndex: 'cover_image', key: 'cover_image', width: 80,
+      render: (v: string) => v ? <img src={v} alt="cover" style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4 }} /> : '-'
+    },
     { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
+    { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: true,
+      render: (v: string) => v || '-'
+    },
+    { title: '抓取方式', dataIndex: 'rule_source_type', key: 'rule_source_type',
+      render: (v: string) => getSourceTypeTag(v)
+    },
+    { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,
+      render: (v: string) => v || '-'
+    },
     { title: '作者', dataIndex: 'author', key: 'author' },
     { title: '来源', dataIndex: 'url', key: 'url', ellipsis: true,
       render: (v: string) => <a href={v} target="_blank" rel="noopener noreferrer">{v}</a>
@@ -69,7 +104,25 @@ export default function Articles() {
     <div>
       <h1>文章管理</h1>
       <Card>
-        <Table columns={columns} dataSource={articles} rowKey="id" loading={loading} />
+        <div style={{ marginBottom: 16 }}>
+          {selectedRowKeys.length > 0 && (
+            <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 篇文章吗?`} onConfirm={handleBatchDelete}>
+              <Button danger icon={<BatchDeleteOutlined />}>
+                批量删除 ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
+          )}
+        </div>
+        <Table
+          columns={columns}
+          dataSource={articles}
+          rowKey="id"
+          loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: number[]) => setSelectedRowKeys(keys),
+          }}
+        />
       </Card>
       <Modal
         title="文章预览"

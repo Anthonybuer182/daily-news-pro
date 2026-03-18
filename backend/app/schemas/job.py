@@ -31,6 +31,7 @@ class Job(JobBase):
     failed_count: int
     error_message: Optional[str]
     created_at: datetime
+    rule_name: Optional[str] = None
 
     class Config:
         from_attributes = True
