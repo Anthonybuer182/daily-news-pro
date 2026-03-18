@@ -91,7 +91,15 @@ def disable_rule(rule_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{rule_id}/run")
 async def run_rule(rule_id: int, db: Session = Depends(get_db)):
-    """Trigger a crawl task for a rule"""
+    """Trigger a crawl task for a rule (runs in background)"""
+    from app.database import engine as db_engine
+    from sqlalchemy.orm import sessionmaker
+    import logging
+    import threading
+    import asyncio
+
+    logger = logging.getLogger(__name__)
+
     db_rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -107,18 +115,44 @@ async def run_rule(rule_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(job)
 
-    # Run crawler asynchronously
-    try:
-        engine = CrawlerEngine(db, job.id)
-        await engine.crawl_rule(rule_id)
-    except Exception as e:
-        job.status = "failed"
-        job.error_message = str(e)
-        job.finished_at = datetime.utcnow()
-        db.commit()
-        raise HTTPException(status_code=500, detail=str(e))
+    job_id = job.id
 
-    return {"job_id": job.id, "status": job.status}
+    # Run crawler in background using separate database session
+    def run_crawler_background():
+        Session = sessionmaker(bind=db_engine)
+        session = Session()
+        try:
+            engine = CrawlerEngine(session, job_id)
+            # Run with timeout to prevent indefinite hanging
+            asyncio.run(engine.crawl_rule(rule_id))
+        except asyncio.TimeoutError:
+            logger.error(f"Crawler job {job_id} timed out")
+            _update_job_status(session, job_id, "failed", "Job timed out")
+        except Exception as e:
+            logger.error(f"Crawler job {job_id} failed: {e}")
+            _update_job_status(session, job_id, "failed", str(e))
+        finally:
+            session.close()
+
+    def _update_job_status(session, job_id, status, error_msg):
+        """Helper to update job status with proper error handling"""
+        try:
+            job = session.query(Job).filter(Job.id == job_id).first()
+            if job:
+                job.status = status
+                job.error_message = error_msg
+                job.finished_at = datetime.utcnow()
+                session.commit()
+                logger.info(f"Job {job_id} status updated to {status}")
+        except Exception as e:
+            logger.error(f"Failed to update job {job_id} status: {e}")
+            session.rollback()
+
+    # Start background task
+    thread = threading.Thread(target=run_crawler_background)
+    thread.start()
+
+    return {"job_id": job.id, "status": "running"}
 
 
 # Level endpoints

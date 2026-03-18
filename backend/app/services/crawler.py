@@ -27,6 +27,10 @@ class CrawlerEngine:
             raise ValueError(f"Rule {rule_id} not found")
 
         self.job = self.db.query(Job).filter(Job.id == self.job_id).first()
+        if not self.job:
+            raise ValueError(f"Job {self.job_id} not found")
+
+        # Ensure job status is set to running before starting
         self.job.status = "running"
         self.job.started_at = datetime.utcnow()
         self.db.commit()

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Tag, message, Popconfirm } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
-import { getRules, deleteRule, enableRule, disableRule, createJob, batchDeleteRules } from '../../api'
+import { getRules, deleteRule, enableRule, disableRule, runRule, batchDeleteRules } from '../../api'
 import RuleModal from './RuleModal'
 
 export default function Rules() {
@@ -66,8 +66,8 @@ export default function Rules() {
 
   const handleRun = async (rule: any) => {
     try {
-      await createJob({ rule_id: rule.id, trigger_type: 'manual' })
-      message.success('任务已创建')
+      await runRule(rule.id)
+      message.success('任务已创建并开始执行')
     } catch (error) {
       message.error('创建任务失败')
     }
