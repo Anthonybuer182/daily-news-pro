@@ -60,11 +60,24 @@ export default function Rules() {
     }
   }
 
+  // 抓取方式标签映射
+  const getSourceTypeTag = (type: string) => {
+    const tagMap: Record<string, { color: string; text: string }> = {
+      rss: { color: 'orange', text: 'RSS' },
+      api: { color: 'blue', text: 'API' },
+      playwright: { color: 'green', text: '网页抓取' },
+    }
+    const tag = tagMap[type] || { color: 'default', text: type }
+    return <Tag color={tag.color}>{tag.text}</Tag>
+  }
+
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '网站', dataIndex: 'site_url', key: 'site_url' },
-    { title: '抓取方式', dataIndex: 'crawl_method', key: 'crawl_method' },
+    { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true },
+    { title: '抓取方式', dataIndex: 'source_type', key: 'source_type',
+      render: (type: string) => getSourceTypeTag(type)
+    },
     { title: '状态', dataIndex: 'status', key: 'status',
       render: (status: string) => (
         <Tag color={status === 'enabled' ? 'green' : 'red'}>{status}</Tag>

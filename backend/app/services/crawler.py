@@ -1,6 +1,7 @@
 import asyncio
 import os
 import hashlib
+import json
 from datetime import datetime
 from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
@@ -30,14 +31,20 @@ class CrawlerEngine:
         self.job.started_at = datetime.utcnow()
         self.db.commit()
 
-        self._log("info", f"Starting crawl for rule: {self.rule.name}")
+        self._log("info", f"Starting crawl for rule: {self.rule.name}, type: {self.rule.source_type}")
 
         try:
-            # Check crawl mode
-            if self.rule.crawl_mode == "smart" or self.rule.levels:
-                result = await self._crawl_with_levels()
+            # 根据 source_type 分发处理
+            source_type = self.rule.source_type or "playwright"
+
+            if source_type == "rss":
+                result = await self._crawl_rss()
+            elif source_type == "api":
+                result = await self._crawl_api()
+            elif source_type == "playwright":
+                result = await self._crawl_playwright()
             else:
-                result = await self._crawl_simple()
+                raise ValueError(f"Unknown source_type: {source_type}")
 
             self.job.status = "success"
             self.job.finished_at = datetime.utcnow()
@@ -51,6 +58,729 @@ class CrawlerEngine:
         self.db.commit()
         return {"job_id": self.job_id, "status": self.job.status}
 
+    async def _crawl_rss(self) -> Dict:
+        """RSS 订阅源抓取"""
+        import httpx
+        from bs4 import BeautifulSoup
+
+        url = self.rule.source_url
+        if not url:
+            raise ValueError("No RSS URL provided")
+
+        self._log("info", f"Fetching RSS feed: {url}")
+
+        try:
+            # 获取 RSS 内容
+            headers = {"User-Agent": self.rule.user_agent or "DailyNewsCrawler/1.0"}
+            response = httpx.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            xml_content = response.text
+
+            # 解析 RSS
+            soup = BeautifulSoup(xml_content, 'xml')
+            items = soup.find_all('item') or soup.find_all('entry')
+
+            if not items:
+                self._log("warning", "No items found in RSS feed")
+                return {"total": 0, "success": 0, "failed": 0}
+
+            # 获取字段映射配置
+            field_mapping = self._get_field_mapping()
+
+            success_count = 0
+            failed_count = 0
+
+            for item in items:
+                try:
+                    article = self._extract_rss_item(item, field_mapping)
+                    if article:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                except Exception as e:
+                    self._log("error", f"Failed to extract RSS item: {e}")
+                    failed_count += 1
+
+            self.job.articles_count = len(items)
+            self.job.success_count = success_count
+            self.job.failed_count = failed_count
+
+            return {"total": len(items), "success": success_count, "failed": failed_count}
+
+        except Exception as e:
+            raise ValueError(f"RSS crawl failed: {e}")
+
+    def _extract_rss_item(self, item, field_mapping: Dict) -> Optional[Article]:
+        """从 RSS item 中提取文章"""
+        # 默认字段映射
+        title_field = field_mapping.get("title", "title")
+        link_field = field_mapping.get("link", "link")
+        content_field = field_mapping.get("content", "content") or field_mapping.get("description", "description")
+        author_field = field_mapping.get("author", "author")
+        date_field = field_mapping.get("date", "date") or field_mapping.get("pubDate", "pubDate")
+
+        # 提取字段
+        title = self._get_rss_field(item, title_field)
+        url = self._get_rss_field(item, link_field)
+        content = self._get_rss_field(item, content_field)
+        author = self._get_rss_field(item, author_field)
+        date_str = self._get_rss_field(item, date_field)
+
+        if not url:
+            return None
+
+        # 检查是否已存在
+        existing = self.db.query(Article).filter(Article.url == url).first()
+        if existing:
+            self._log("info", f"Article already exists: {url}")
+            return existing
+
+        # 生成 markdown
+        markdown_content = self._generate_markdown({
+            "title": title,
+            "text": content or "",
+            "author": author,
+            "date": date_str,
+        }, url)
+        markdown_file = self._save_markdown(markdown_content, url)
+
+        # 创建文章记录
+        article = Article(
+            rule_id=self.rule.id,
+            url=url,
+            title=title,
+            summary=content[:500] if content else None,
+            author=author,
+            publish_time=self._parse_date(date_str),
+            markdown_file=markdown_file,
+            status="success",
+        )
+
+        self.db.add(article)
+        self.db.commit()
+
+        self._log("info", f"Extracted RSS article: {title}")
+        return article
+
+    def _get_rss_field(self, item, field: str) -> Optional[str]:
+        """获取 RSS item 的字段"""
+        if not field:
+            return None
+
+        # 尝试不同的大小写形式
+        element = item.find(field.lower())
+        if element:
+            return element.get_text(strip=True)
+
+        element = item.find(field.upper())
+        if element:
+            return element.get_text(strip=True)
+
+        # 尝试直接获取
+        return item.get(field)
+
+    def _get_field_mapping(self) -> Dict:
+        """获取字段映射配置"""
+        if not self.rule.field_mapping:
+            return {}
+
+        try:
+            return json.loads(self.rule.field_mapping)
+        except:
+            return {}
+
+    def _get_extract_config(self) -> Dict:
+        """获取 Playwright 提取配置"""
+        if not self.rule.extract_config:
+            return {}
+
+        try:
+            return json.loads(self.rule.extract_config)
+        except:
+            return {}
+
+    def _get_request_config(self) -> Dict:
+        """获取 API 请求配置"""
+        if not self.rule.request_config:
+            return {}
+
+        try:
+            return json.loads(self.rule.request_config)
+        except:
+            return {}
+
+    async def _crawl_api(self) -> Dict:
+        """API 接口抓取"""
+        import httpx
+
+        url = self.rule.source_url
+        if not url:
+            raise ValueError("No API URL provided")
+
+        self._log("info", f"Fetching API: {url}")
+
+        try:
+            # 获取请求配置
+            headers = {}
+            if self.rule.headers_config:
+                try:
+                    headers = json.loads(self.rule.headers_config)
+                except:
+                    pass
+            if self.rule.user_agent:
+                headers["User-Agent"] = self.rule.user_agent
+
+            # 处理动态日期参数
+            from datetime import timedelta
+            if "{{days_ago}}" in url:
+                match_days = 7
+                import re
+                m = re.search(r'created:>(\d+)', url)
+                if m:
+                    match_days = int(m.group(1))
+                date = (datetime.now() - timedelta(days=match_days)).strftime("%Y-%m-%d")
+                url = url.replace("{{days_ago}}", date)
+                self._log("info", f"Using date: {date} for API query")
+
+            response = httpx.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            # 获取字段映射
+            field_mapping = self._get_field_mapping()
+
+            # 处理返回数据（支持数组或对象中的 items）
+            items = data
+            if isinstance(data, dict):
+                items = data.get("items", data.get("data", [data]))
+
+            if not isinstance(items, list):
+                items = [items]
+
+            success_count = 0
+            failed_count = 0
+
+            for item in items:
+                try:
+                    article = self._extract_api_item(item, field_mapping)
+                    if article:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                except Exception as e:
+                    self._log("error", f"Failed to extract API item: {e}")
+                    failed_count += 1
+
+            self.job.articles_count = len(items)
+            self.job.success_count = success_count
+            self.job.failed_count = failed_count
+
+            return {"total": len(items), "success": success_count, "failed": failed_count}
+
+        except Exception as e:
+            raise ValueError(f"API crawl failed: {e}")
+
+    def _extract_api_item(self, item: Dict, field_mapping: Dict) -> Optional[Article]:
+        """从 API 响应中提取文章"""
+        # 获取字段映射
+        title_field = field_mapping.get("title", "title")
+        url_field = field_mapping.get("url", "url") or field_mapping.get("link", "link") or field_mapping.get("html_url", "html_url")
+        content_field = field_mapping.get("content", "content") or field_mapping.get("body", "body") or field_mapping.get("description", "description")
+        author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
+        date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
+        image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
+
+        # 提取字段
+        title = self._get_nested_field(item, title_field)
+        url = self._get_nested_field(item, url_field)
+        content = self._get_nested_field(item, content_field)
+        author = self._get_nested_field(item, author_field)
+        date_str = self._get_nested_field(item, date_field)
+        image = self._get_nested_field(item, image_field)
+
+        if not url:
+            return None
+
+        # 检查是否已存在
+        existing = self.db.query(Article).filter(Article.url == url).first()
+        if existing:
+            self._log("info", f"Article already exists: {url}")
+            return existing
+
+        # 生成 markdown
+        markdown_content = self._generate_markdown({
+            "title": title,
+            "text": content or "",
+            "author": author,
+            "date": date_str,
+            "image": image,
+        }, url)
+        markdown_file = self._save_markdown(markdown_content, url)
+
+        # 创建文章记录
+        article = Article(
+            rule_id=self.rule.id,
+            url=url,
+            title=title,
+            summary=content[:500] if content else None,
+            author=author,
+            publish_time=self._parse_date(date_str),
+            cover_image=image,
+            markdown_file=markdown_file,
+            status="success",
+        )
+
+        self.db.add(article)
+        self.db.commit()
+
+        self._log("info", f"Extracted API article: {title}")
+        return article
+
+    def _get_nested_field(self, data: Dict, field: str) -> Optional[str]:
+        """获取嵌套字段，支持点号分隔的路径"""
+        if not field or not data:
+            return None
+
+        # 支持嵌套如 "owner.login"
+        parts = field.split(".")
+        current = data
+
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                return None
+
+        return str(current) if current is not None else None
+
+    async def _crawl_playwright(self) -> Dict:
+        """Playwright + Trafilatura 抓取"""
+        # 检查是否有新的 extract_config 配置
+        extract_config = self._get_extract_config()
+        if extract_config:
+            return await self._crawl_with_config(extract_config)
+
+        # 旧逻辑：检查是否有层级配置
+        if self.rule.levels:
+            return await self._crawl_with_levels()
+        else:
+            return await self._crawl_simple_playwright()
+
+    async def _crawl_with_config(self, config: Dict) -> Dict:
+        """使用新的统一配置抓取 - 两阶段：列表→详情"""
+        list_config = config.get("list", {})
+        detail_config = config.get("detail", {})
+        wait_config = config.get("wait", {})
+
+        # 获取列表页 URL
+        list_url = list_config.get("url")
+        if not list_url:
+            list_url = self.rule.source_url
+
+        if not list_url:
+            raise ValueError("No list page URL provided")
+
+        self._log("info", f"Crawling with unified config, list URL: {list_url}")
+
+        async with PlaywrightCrawler(
+            user_agent=self.rule.user_agent,
+            delay_min=self.rule.delay_min,
+            delay_max=self.rule.delay_max,
+        ) as crawler:
+            # 检查是否配置了分页
+            pagination = list_config.get("pagination", {})
+
+            if pagination:
+                # 分页抓取
+                all_items = await self._crawl_with_pagination(list_url, list_config, crawler)
+            else:
+                # 单页抓取
+                html = await crawler.fetch(list_url)
+                if not html:
+                    raise ValueError(f"Failed to fetch list page: {list_url}")
+
+                # 检查是否配置了列表字段提取（item_fields）
+                item_fields = list_config.get("item_fields", {})
+                if item_fields:
+                    all_items = self._extract_list_items_with_config(html, list_config, list_url)
+                else:
+                    # 没有配置 item_fields，使用原来的方式
+                    article_urls = self._extract_links_with_config(html, list_config, list_url)
+                    all_items = [{'url': url} for url in article_urls]
+
+            self._log("info", f"Extracted {len(all_items)} items from list pages")
+
+            # 过滤链接
+            list_items = self._filter_list_items(all_items)
+
+            # 保存到数据库（状态为 pending）
+            saved_count = self._save_list_items(list_items)
+            self._log("info", f"Saved {saved_count} new pending articles from list")
+
+            # 阶段2：抓取详情页（只抓新保存的）
+            return await self._extract_pending_articles(detail_config, crawler)
+
+    async def _crawl_with_pagination(self, start_url: str, list_config: Dict, crawler) -> List[Dict]:
+        """分页抓取列表"""
+        pagination = list_config.get("pagination", {})
+        pagination_type = pagination.get("type", "button")  # button, scroll, param
+        max_pages = pagination.get("max_pages", 5)
+        item_fields = list_config.get("item_fields", {})
+
+        all_items = []
+        current_url = start_url
+
+        for page in range(1, max_pages + 1):
+            self._log("info", f"Fetching list page {page}: {current_url}")
+
+            # 获取页面
+            html = await crawler.fetch(current_url)
+            if not html:
+                self._log("warning", f"Failed to fetch page {page}")
+                break
+
+            # 提取内容
+            if item_fields:
+                items = self._extract_list_items_with_config(html, list_config, current_url)
+            else:
+                urls = self._extract_links_with_config(html, list_config, current_url)
+                items = [{'url': url} for url in urls]
+
+            if not items:
+                self._log("info", f"No more items found on page {page}")
+                break
+
+            all_items.extend(items)
+            self._log("info", f"Page {page}: extracted {len(items)} items, total: {len(all_items)}")
+
+            # 处理分页
+            if page >= max_pages:
+                break
+
+            if pagination_type == "button":
+                # 点击"加载更多"按钮
+                button_selector = pagination.get("selector", ".load-more, .more, button:has-text('更多')")
+                html = await crawler.click_and_wait(current_url, button_selector)
+                if not html:
+                    self._log("info", "No more button found, stopping pagination")
+                    break
+                # 继续用相同 URL 提取（页面已更新）
+                continue
+            elif pagination_type == "scroll":
+                # 滚动加载 - 使用 scroll_load 方法
+                scroll_times = pagination.get("scroll_times", 3)
+                html = await crawler.scroll_load(current_url, "", scroll_times)
+                if not html:
+                    self._log("info", "Scroll failed, stopping pagination")
+                    break
+                # 提取滚动后的内容
+                if item_fields:
+                    new_items = self._extract_list_items_with_config(html, list_config, current_url)
+                else:
+                    urls = self._extract_links_with_config(html, list_config, current_url)
+                    new_items = [{'url': url} for url in urls]
+                # 如果没有新内容，停止
+                if not new_items or len(new_items) <= len(items):
+                    self._log("info", "No more content after scroll")
+                    break
+                continue
+            elif pagination_type == "param":
+                # URL参数分页
+                param_name = pagination.get("param", "page")
+                # 解析当前URL，添加/替换分页参数
+                from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+                parsed = urlparse(current_url)
+                params = parse_qs(parsed.query)
+                params[param_name] = [str(page + 1)]
+                new_query = urlencode(params, doseq=True)
+                current_url = urlunparse((
+                    parsed.scheme, parsed.netloc, parsed.path,
+                    parsed.params, new_query, parsed.fragment
+                ))
+            else:
+                break
+
+        return all_items
+
+    def _filter_list_items(self, items: List[Dict]) -> List[Dict]:
+        """过滤列表项 - 排除模式和增量更新"""
+        import re
+
+        filtered = []
+        exclude_patterns = []
+        if self.rule.exclude_patterns:
+            try:
+                exclude_patterns = json.loads(self.rule.exclude_patterns)
+            except:
+                pass
+
+        detail_url_pattern = self.rule.detail_url_pattern
+
+        for item in items:
+            url = item.get('url', '')
+            if not url:
+                continue
+
+            # URL 模式过滤
+            if detail_url_pattern:
+                try:
+                    if not re.match(detail_url_pattern, url):
+                        continue
+                except re.error:
+                    pass
+
+            # 排除模式过滤
+            skip = False
+            for pattern in exclude_patterns:
+                if pattern.replace("*", "") in url:
+                    skip = True
+                    break
+            if skip:
+                continue
+
+            filtered.append(item)
+
+        return filtered
+
+    def _is_duplicate_article(self, url: str) -> bool:
+        """检查是否为已存在的文章（增量更新）"""
+        from app.models import Article
+
+        # 检查是否已存在
+        existing = self.db.query(Article).filter(Article.url == url).first()
+        if existing:
+            # 如果已存在且状态为 success，说明已抓取过，跳过
+            if existing.status == "success":
+                return True
+            # 如果是 pending 或 failed，则重新抓取
+        return False
+
+    def _save_list_items(self, items: List[Dict]) -> int:
+        """保存列表项到数据库（增量更新：跳过已存在的success文章）"""
+        from app.models import Article
+
+        count = 0
+        for item in items:
+            url = item.get('url')
+            if not url:
+                continue
+
+            # 增量更新：检查是否已存在
+            existing = self.db.query(Article).filter(Article.url == url).first()
+            if existing:
+                # 如果已存在且状态为 success，说明已抓取过，跳过
+                if existing.status == "success":
+                    continue
+                # 如果是 pending 或 failed，则更新基本信息后重新抓取
+                if not existing.title and item.get('title'):
+                    existing.title = item.get('title')
+                if not existing.summary and item.get('summary'):
+                    existing.summary = item.get('summary')[:500]
+                if not existing.cover_image and item.get('image'):
+                    existing.cover_image = item.get('image')
+                if not existing.author and item.get('author'):
+                    existing.author = item.get('author')
+                if not existing.publish_time and item.get('date'):
+                    existing.publish_time = self._parse_date(item.get('date'))
+                existing.updated_at = datetime.utcnow()
+                existing.status = "pending"  # 标记为待抓取
+                self.db.commit()
+                continue
+
+            # 创建新记录（状态为 pending，表示待抓取详情）
+            article = Article(
+                rule_id=self.rule.id,
+                url=url,
+                title=item.get('title'),
+                summary=item.get('summary', '').strip()[:500] if item.get('summary') else None,
+                author=item.get('author'),
+                publish_time=self._parse_date(item.get('date')) if item.get('date') else None,
+                cover_image=item.get('image'),
+                status="pending",  # 待抓取详情
+            )
+            self.db.add(article)
+            count += 1
+
+        if count > 0:
+            self.db.commit()
+
+        return count
+
+    async def _extract_pending_articles(self, detail_config: Dict, crawler) -> Dict:
+        """抓取 pending 状态的详情页内容"""
+        from app.models import Article
+
+        # 获取所有 pending 的文章
+        pending_articles = self.db.query(Article).filter(
+            Article.rule_id == self.rule.id,
+            Article.status == "pending"
+        ).all()
+
+        if not pending_articles:
+            self._log("info", "No pending articles to fetch")
+            return {"total": 0, "success": 0, "failed": 0}
+
+        self._log("info", f"Fetching details for {len(pending_articles)} pending articles")
+
+        success_count = 0
+        failed_count = 0
+
+        for article in pending_articles:
+            try:
+                url = article.url
+
+                # 获取详情页内容
+                html = await crawler.fetch(url)
+                if not html:
+                    # 降级使用 httpx
+                    import httpx
+                    headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
+                    try:
+                        response = httpx.get(url, headers=headers, timeout=30)
+                        html = response.text
+                    except Exception as e:
+                        self._log("error", f"Failed to fetch {url}: {e}")
+                        article.status = "failed"
+                        article.error_message = str(e)
+                        failed_count += 1
+                        continue
+
+                if not html:
+                    article.status = "failed"
+                    article.error_message = "Empty response"
+                    failed_count += 1
+                    continue
+
+                # 提取内容
+                if detail_config:
+                    content = await self._extract_with_config(html, detail_config)
+                else:
+                    content = TrafilaturaExtractor.extract_with_fallback(html)
+
+                # 更新基本信息（如果之前没有）
+                if not article.title and content.get("title"):
+                    article.title = content.get("title")
+                if not article.summary and content.get("text"):
+                    article.summary = content.get("text")[:500]
+                if not article.author and content.get("author"):
+                    article.author = content.get("author")
+                if not article.publish_time and content.get("date"):
+                    article.publish_time = self._parse_date(content.get("date"))
+                if not article.cover_image and content.get("image"):
+                    article.cover_image = content.get("image")
+
+                # 生成 markdown 并保存
+                markdown_content = self._generate_markdown(content, url)
+                markdown_file = self._save_markdown(markdown_content, url)
+
+                article.markdown_file = markdown_file
+                article.status = "success"
+                self.db.commit()
+
+                success_count += 1
+                self._log("info", f"Extracted article: {article.title}")
+
+            except Exception as e:
+                self._log("error", f"Failed to process {article.url}: {e}")
+                article.status = "failed"
+                article.error_message = str(e)
+                self.db.commit()
+                failed_count += 1
+
+        self.job.articles_count = len(pending_articles)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {
+            "total": len(pending_articles),
+            "success": success_count,
+            "failed": failed_count,
+        }
+
+    async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
+        """使用配置提取文章内容"""
+        success_count = 0
+        failed_count = 0
+
+        for url in urls:
+            try:
+                article = await self._extract_single_article_with_config(url, detail_config, crawler)
+                if article:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                self._log("error", f"Failed to extract {url}: {e}")
+                failed_count += 1
+
+        self.job.articles_count = len(urls)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {
+            "total": len(urls),
+            "success": success_count,
+            "failed": failed_count,
+        }
+
+    async def _extract_single_article_with_config(self, url: str, detail_config: Dict, crawler) -> Optional[Article]:
+        """使用配置提取单篇文章"""
+        # 检查是否已存在
+        existing = self.db.query(Article).filter(Article.url == url).first()
+        if existing:
+            self._log("info", f"Article already exists: {url}")
+            return existing
+
+        # 获取页面内容
+        html = await crawler.fetch(url)
+        if not html:
+            # 降级使用 httpx
+            import httpx
+            headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
+            try:
+                response = httpx.get(url, headers=headers, timeout=30)
+                html = response.text
+            except Exception as e:
+                self._log("error", f"Failed to fetch {url}: {e}")
+                return None
+
+        if not html:
+            return None
+
+        # 提取内容
+        if detail_config:
+            content = await self._extract_with_config(html, detail_config)
+        else:
+            # 使用 trafilatura 作为默认
+            content = TrafilaturaExtractor.extract_with_fallback(html)
+
+        # 如果没有提取到标题，使用 URL 作为标题
+        if not content.get("title"):
+            content["title"] = url.split("/")[-1] or url
+
+        # 生成 markdown
+        markdown_content = self._generate_markdown(content, url)
+        markdown_file = self._save_markdown(markdown_content, url)
+
+        # 创建文章记录
+        article = Article(
+            rule_id=self.rule.id,
+            url=url,
+            title=content.get("title"),
+            summary=content.get("text", "")[:500] if content.get("text") else None,
+            author=content.get("author"),
+            publish_time=self._parse_date(content.get("date")),
+            cover_image=content.get("image"),
+            markdown_file=markdown_file,
+            status="success",
+        )
+
+        self.db.add(article)
+        self.db.commit()
+
+        self._log("info", f"Extracted article: {article.title}")
+        return article
+
     async def _crawl_with_levels(self) -> Dict:
         """Crawl using level configuration"""
         levels = self.db.query(RuleLevel).filter(
@@ -58,32 +788,27 @@ class CrawlerEngine:
         ).order_by(RuleLevel.level).all()
 
         if not levels:
-            # Fallback to simple crawl
-            return await self._crawl_simple()
+            return await self._crawl_simple_playwright()
 
         # Start with first level URLs
         current_urls = [levels[0].url] if levels[0].url else []
 
         for level in levels:
             if level.is_final:
-                # Final level: first extract links using level's selector, then extract content
                 if level.link_selector:
-                    # Extract links from current URLs using level's selector
                     final_urls = await self._extract_links(current_urls, level)
                     self._log("info", f"Final level extracted {len(final_urls)} links")
                     return await self._extract_articles(final_urls)
                 else:
-                    # No selector, just extract from current URLs
                     return await self._extract_articles(current_urls)
             else:
-                # Intermediate level: extract links
                 current_urls = await self._extract_links(current_urls, level)
 
         return {"urls": current_urls}
 
-    async def _crawl_simple(self) -> Dict:
-        """Simple single-level crawl"""
-        url = self.rule.list_url or self.rule.site_url
+    async def _crawl_simple_playwright(self) -> Dict:
+        """Simple single-level crawl for Playwright"""
+        url = self.rule.source_url
         if not url:
             raise ValueError("No URL to crawl")
 
@@ -97,8 +822,8 @@ class CrawlerEngine:
         """Extract links from pages"""
         all_links = []
 
-        # Use httpx for link extraction if not playwright
-        if self.rule.crawl_method == "playwright":
+        # Use Playwright for link extraction if source_type is playwright
+        if self.rule.source_type == "playwright":
             async with PlaywrightCrawler(
                 user_agent=self.rule.user_agent,
                 delay_min=self.rule.delay_min,
@@ -107,12 +832,11 @@ class CrawlerEngine:
                 html = await self._fetch_with_method(urls[0], crawler)
                 if html:
                     all_links = self._extract_links_from_html(html, urls[0], level)
-        elif self.rule.crawl_method == "github":
-            # GitHub API returns JSON
-            for url in urls:
-                all_links.extend(self._extract_links_from_github_api(url))
+        elif self.rule.source_type == "api":
+            # API mode - skip link extraction, handled in _crawl_api
+            pass
         else:
-            # Use httpx
+            # Use httpx for RSS mode
             for url in urls:
                 self._log("info", f"Extracting links from: {url}")
                 html = self._fetch_with_httpx(url)
@@ -251,21 +975,17 @@ class CrawlerEngine:
             self._log("info", f"Article already exists: {url}")
             return existing
 
-        # Special handling for GitHub repositories
-        if self.rule.crawl_method == "github":
-            return await self._extract_github_repo(url)
-
-        # Fetch based on method
+        # Fetch based on source_type (only playwright is used here)
         html = None
-        if self.rule.crawl_method == "playwright":
-            async with PlaywrightCrawler(
-                user_agent=self.rule.user_agent,
-                delay_min=self.rule.delay_min,
-                delay_max=self.rule.delay_max,
-            ) as crawler:
-                html = await crawler.fetch(url)
+        async with PlaywrightCrawler(
+            user_agent=self.rule.user_agent,
+            delay_min=self.rule.delay_min,
+            delay_max=self.rule.delay_max,
+        ) as crawler:
+            html = await crawler.fetch(url)
 
-        if not html and self.rule.crawl_method in ["httpx", "hybrid"]:
+        # Fallback to httpx if playwright fails
+        if not html:
             import httpx
             headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
             response = httpx.get(url, headers=headers, timeout=30)
@@ -274,8 +994,8 @@ class CrawlerEngine:
         if not html:
             raise ValueError(f"Failed to fetch: {url}")
 
-        # Extract content - use trafilatura for better extraction
-        if self.rule.crawl_method in ["trafilatura", "hybrid"] or self.rule.title_selector is None:
+        # Extract content - use trafilatura if no custom selectors configured
+        if self.rule.title_selector is None:
             # If no custom selectors configured, use trafilatura for better results
             content = TrafilaturaExtractor.extract_with_fallback(html)
         else:
@@ -305,7 +1025,7 @@ class CrawlerEngine:
         return article
 
     async def _extract_with_selectors(self, html: str) -> Dict:
-        """Extract using custom selectors"""
+        """Extract using custom selectors (legacy format)"""
         result = {}
 
         if self.rule.title_selector:
@@ -333,6 +1053,119 @@ class CrawlerEngine:
             result["image"] = SelectorParser.extract_attribute_css(html, self.rule.cover_image_selector, "src")
 
         return result
+
+    async def _extract_with_config(self, html: str, detail_config: Dict) -> Dict:
+        """Extract using new unified extract_config format"""
+        result = {}
+
+        for field_name, field_config in detail_config.items():
+            if not field_config:
+                continue
+
+            selector = field_config.get("selector")
+            extract_type = field_config.get("type", "text")  # text, html, attribute
+            attr = field_config.get("attr", "src")  # for attribute type
+
+            if not selector:
+                continue
+
+            try:
+                if extract_type == "text":
+                    result[field_name] = SelectorParser.extract_text_css(html, selector)
+                elif extract_type == "html":
+                    result[field_name] = SelectorParser.extract_html_css(html, selector)
+                elif extract_type == "attribute":
+                    result[field_name] = SelectorParser.extract_attribute_css(html, selector, attr)
+            except Exception as e:
+                self._log("warning", f"Failed to extract {field_name}: {e}")
+                result[field_name] = None
+
+        return result
+
+    def _extract_links_with_config(self, html: str, list_config: Dict, base_url: str) -> List[str]:
+        """Extract article links using new unified config format"""
+        selector = list_config.get("selector", "a")
+        link_attr = list_config.get("link_attr", "href")
+
+        # Use CSS selector to extract links
+        links = SelectorParser.extract_links_css(html, selector, base_url)
+
+        # If link_attr is not href, we need to handle it differently
+        if link_attr != "href":
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, 'lxml')
+            links = []
+            for element in soup.select(selector):
+                attr_value = element.get(link_attr)
+                if attr_value:
+                    # Handle relative URLs
+                    from urllib.parse import urljoin
+                    full_url = urljoin(base_url, attr_value)
+                    links.append(full_url)
+
+        return list(set(links))
+
+    def _extract_list_items_with_config(self, html: str, list_config: Dict, base_url: str) -> List[Dict]:
+        """Extract list items with basic info (title, summary, etc.)"""
+        from bs4 import BeautifulSoup
+
+        selector = list_config.get("selector", "a")
+        item_fields = list_config.get("item_fields", {})  # 列表中每个item的字段提取配置
+
+        soup = BeautifulSoup(html, 'lxml')
+        elements = soup.select(selector)
+
+        items = []
+        for el in elements:
+            item = {}
+
+            # 提取链接
+            link = el.get('href') or el.get('data-url')
+            if link:
+                from urllib.parse import urljoin
+                item['url'] = urljoin(base_url, link)
+            else:
+                # 尝试从父元素获取链接
+                parent = el.find_parent('a')
+                if parent:
+                    item['url'] = parent.get('href')
+                    if item['url']:
+                        from urllib.parse import urljoin
+                        item['url'] = urljoin(base_url, item['url'])
+
+            # 提取配置的字段
+            for field_name, field_config in item_fields.items():
+                if not field_config:
+                    continue
+
+                selector = field_config.get("selector")  # 可以是 CSS 选择器或相对路径
+                extract_type = field_config.get("type", "text")
+
+                if not selector:
+                    continue
+
+                try:
+                    if extract_type == "text":
+                        # 尝试在当前元素内查找
+                        target = el.select_one(selector) if ',' not in selector else el
+                        if target:
+                            item[field_name] = target.get_text(strip=True)
+                    elif extract_type == "attribute":
+                        attr = field_config.get("attr", "src")
+                        target = el.select_one(selector) if ',' not in selector else el
+                        if target:
+                            item[field_name] = target.get(attr)
+                    elif extract_type == "html":
+                        target = el.select_one(selector) if ',' not in selector else el
+                        if target:
+                            item[field_name] = str(target)
+                except Exception as e:
+                    pass
+
+            if item.get('url'):
+                items.append(item)
+
+        return items
 
     async def _extract_github_repo(self, url: str) -> Optional[Article]:
         """Extract GitHub repository information using API"""

@@ -51,6 +51,13 @@ class SelectorParser:
         return el.get_text(strip=True) if el else None
 
     @staticmethod
+    def extract_html_css(html: str, selector: str) -> Optional[str]:
+        """Extract HTML using CSS selector"""
+        soup = BeautifulSoup(html, 'lxml')
+        el = soup.select_one(selector)
+        return str(el) if el else None
+
+    @staticmethod
     def extract_text_xpath(html: str, selector: str) -> Optional[str]:
         """Extract text using XPath"""
         try:
