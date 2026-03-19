@@ -24,6 +24,7 @@ const DEFAULT_PLAYWRIGHT_CONFIG = {
     url: '',
     selector: '.article-item',  // 列表中每个文章的容器选择器
     link_attr: 'href',
+    max_items: 3,  // 默认抓取前3条，可设置为更大值或移除以抓取全部
     // 列表中每个item的基本信息提取配置
     item_fields: {
       title: { selector: '.title, h3', type: 'text' },
@@ -194,6 +195,13 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       </Form.Item>
 
       <Form.Item
+        name="detail_url_pattern"
+        label="详情页 URL 匹配 (正则)"
+      >
+        <Input placeholder="如: https://example.com/article/.*" />
+      </Form.Item>
+
+      <Form.Item
         name="extract_config"
         label="抓取配置 (JSON)"
         tooltip={
@@ -205,7 +213,11 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
               <li>从列表页提取文章链接+基本信息 → 存入数据库（待抓取状态）</li>
               <li>遍历待抓取文章 → 访问详情页 → 提取完整内容 → 保存为markdown</li>
             </ol>
-            <Text type="secondary">配置示例：</Text>
+            <div style={{ marginTop: 8 }}>
+              <Text strong>max_items:</Text>
+              <Text type="secondary"> 列表页抓取数量，默认3条，设为更大值或移除此字段可抓取全部</Text>
+            </div>
+            <Text type="secondary" style={{ marginTop: 4, display: 'block' }}>配置示例：</Text>
             <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, marginTop: 4, overflow: 'auto', maxHeight: 300 }}>
 {JSON.stringify(DEFAULT_PLAYWRIGHT_CONFIG, null, 2)}
             </pre>
@@ -225,11 +237,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         </Button>
       </Space>
 
-      <Form.Item name="detail_url_pattern" label="详情页 URL 匹配 (正则)" style={{ marginTop: 16 }}>
-        <Input placeholder="如: https://example.com/article/.*" />
-      </Form.Item>
-
-      <Form.Item name="exclude_patterns" label="排除 URL 模式">
+      <Form.Item name="exclude_patterns" label="排除 URL 模式" style={{ marginTop: 16 }}>
         <TextArea rows={2} placeholder='["/tag/", "/category/"]' />
       </Form.Item>
 

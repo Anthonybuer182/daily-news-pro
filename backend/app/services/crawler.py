@@ -384,7 +384,9 @@ class CrawlerEngine:
         if not list_url:
             raise ValueError("No list page URL provided")
 
-        self._log("info", f"Crawling with unified config, list URL: {list_url}")
+        # 获取最大抓取数量配置，默认3条
+        max_items = list_config.get("max_items", 3)
+        self._log("info", f"Crawling with unified config, list URL: {list_url}, max_items: {max_items}")
 
         async with PlaywrightCrawler(
             user_agent=self.rule.user_agent,
@@ -417,6 +419,11 @@ class CrawlerEngine:
             # 过滤链接
             list_items = self._filter_list_items(all_items)
 
+            # 应用最大数量限制（默认抓取前3条）
+            if max_items and len(list_items) > max_items:
+                list_items = list_items[:max_items]
+                self._log("info", f"Limited to {max_items} items per configuration")
+
             # 保存到数据库（状态为 pending）
             saved_count = self._save_list_items(list_items)
             self._log("info", f"Saved {saved_count} new pending articles from list")
@@ -430,11 +437,17 @@ class CrawlerEngine:
         pagination_type = pagination.get("type", "button")  # button, scroll, param
         max_pages = pagination.get("max_pages", 5)
         item_fields = list_config.get("item_fields", {})
+        max_items = list_config.get("max_items")  # 获取最大数量限制
 
         all_items = []
         current_url = start_url
 
         for page in range(1, max_pages + 1):
+            # 如果已达到最大数量，停止抓取
+            if max_items and len(all_items) >= max_items:
+                self._log("info", f"Reached max_items limit ({max_items}), stopping pagination")
+                break
+
             self._log("info", f"Fetching list page {page}: {current_url}")
 
             # 获取页面
@@ -456,6 +469,11 @@ class CrawlerEngine:
 
             all_items.extend(items)
             self._log("info", f"Page {page}: extracted {len(items)} items, total: {len(all_items)}")
+
+            # 如果已达到最大数量，停止抓取
+            if max_items and len(all_items) >= max_items:
+                self._log("info", f"Reached max_items limit ({max_items}), stopping pagination")
+                break
 
             # 处理分页
             if page >= max_pages:
