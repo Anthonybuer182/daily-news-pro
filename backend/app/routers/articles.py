@@ -62,9 +62,16 @@ def get_article_markdown(article_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{article_id}")
 def delete_article(article_id: int, db: Session = Depends(get_db)):
+    import os
     article = db.query(Article).filter(Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
+    # 删除关联的 markdown 文件
+    if article.markdown_file and os.path.exists(article.markdown_file):
+        try:
+            os.remove(article.markdown_file)
+        except Exception:
+            pass
     db.delete(article)
     db.commit()
     return {"message": "Article deleted"}
@@ -73,10 +80,17 @@ def delete_article(article_id: int, db: Session = Depends(get_db)):
 @router.post("/batch-delete")
 def batch_delete_articles(request: BatchDeleteRequest, db: Session = Depends(get_db)):
     """批量删除文章"""
+    import os
     deleted_count = 0
     for article_id in request.ids:
         article = db.query(Article).filter(Article.id == article_id).first()
         if article:
+            # 删除关联的 markdown 文件
+            if article.markdown_file and os.path.exists(article.markdown_file):
+                try:
+                    os.remove(article.markdown_file)
+                except Exception:
+                    pass
             db.delete(article)
             deleted_count += 1
     db.commit()

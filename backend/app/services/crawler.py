@@ -676,6 +676,9 @@ class CrawlerEngine:
                 # 提取内容
                 if detail_config:
                     content = await self._extract_with_config(html, detail_config)
+                    # 如果自定义提取没有返回正文内容，回退到 trafilatura
+                    if not content.get("text") and not content.get("content"):
+                        content = TrafilaturaExtractor.extract_with_fallback(html)
                 else:
                     content = TrafilaturaExtractor.extract_with_fallback(html)
 
@@ -1277,8 +1280,16 @@ class CrawlerEngine:
 
         lines.append("\n---\n\n")
 
-        if content.get("text"):
-            lines.append(content["text"])
+        # 处理两种内容格式：trafilatura返回text，自定义配置返回content
+        text_content = content.get("text") or content.get("content")
+        if text_content:
+            # 如果是原始HTML（从content获取），需要转换为纯文本
+            if content.get("content") and not content.get("text"):
+                # 使用BeautifulSoup提取纯文本
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(text_content, 'html.parser')
+                text_content = soup.get_text(separator='\n', strip=True)
+            lines.append(text_content)
 
         return "\n".join(lines)
 
