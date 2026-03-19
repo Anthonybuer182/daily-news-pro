@@ -230,28 +230,28 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         name="extract_config"
         label="抓取配置 (JSON)"
         tooltip={
-          <div style={{ maxWidth: 500 }}>
+          <div style={{ maxWidth: 500, color: '#fff', background: 'rgba(0,0,0,0.9)', padding: 12, borderRadius: 4, fontSize: 13 }}>
             <div>
-              <Text strong>两阶段抓取流程：</Text>
+              <Text strong style={{ color: '#fff' }}>两阶段抓取流程：</Text>
             </div>
             <ol style={{ paddingLeft: 16, margin: '8px 0', fontSize: 12 }}>
-              <li><Text>从列表页提取文章链接+基本信息</Text></li>
-              <li><Text>遍历待抓取文章 → 访问详情页 → 提取完整内容 → 保存为markdown</Text></li>
+              <li><Text style={{ color: '#e0e0e0' }}>从列表页提取文章链接+基本信息</Text></li>
+              <li><Text style={{ color: '#e0e0e0' }}>遍历待抓取文章 → 访问详情页 → 提取完整内容 → 保存为markdown</Text></li>
             </ol>
             <div style={{ marginTop: 8 }}>
-              <Text strong>list.selector:</Text>
-              <Text type="secondary"> 文章容器选择器，如 .article-item</Text>
+              <Text strong style={{ color: '#fff' }}>list.selector:</Text>
+              <Text style={{ color: '#b0b0b0' }}> 文章容器选择器，如 .article-item</Text>
             </div>
             <div style={{ marginTop: 4 }}>
-              <Text strong>list.max_items:</Text>
-              <Text type="secondary"> 列表页抓取数量，默认3条</Text>
+              <Text strong style={{ color: '#fff' }}>list.max_items:</Text>
+              <Text style={{ color: '#b0b0b0' }}> 列表页抓取数量，默认3条</Text>
             </div>
             <div style={{ marginTop: 4 }}>
-              <Text strong>detail.*:</Text>
-              <Text type="secondary"> 详情页内容选择器</Text>
+              <Text strong style={{ color: '#fff' }}>detail.*:</Text>
+              <Text style={{ color: '#b0b0b0' }}> 详情页内容选择器</Text>
             </div>
-            <Text type="secondary" style={{ marginTop: 8, display: 'block' }}>配置示例：</Text>
-            <pre style={{ fontSize: 11, background: '#f5f5f5', padding: 8, marginTop: 4, overflow: 'auto', maxHeight: 300 }}>
+            <Text style={{ color: '#b0b0b0', marginTop: 8, display: 'block' }}>配置示例：</Text>
+            <pre style={{ fontSize: 11, background: '#1a1a1a', color: '#52c41a', padding: 8, marginTop: 4, overflow: 'auto', maxHeight: 300, borderRadius: 4 }}>
 {JSON.stringify(DEFAULT_PLAYWRIGHT_CONFIG, null, 2)}
             </pre>
           </div>
