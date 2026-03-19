@@ -1,7 +1,7 @@
 import asyncio
 import random
 from typing import Optional, Dict, List
-from playwright.async_api import async_playwright, Browser, Page, Playwright
+from playwright.async_api import async_playwright, Browser, Page, Playwright, Response
 from app.services.selector import SelectorParser
 
 # HTTP fallback imports
@@ -10,6 +10,65 @@ try:
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
+
+
+def build_stealth_script() -> str:
+    """构建反检测脚本，模拟真实浏览器环境"""
+    return """
+    // 移除 webdriver 属性
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    // 模拟 Chrome 对象
+    window.chrome = {
+        runtime: {},
+        loadTimes: function() {},
+        csi: function() {}
+    };
+
+    // 模拟 plugins
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            const plugins = [
+                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+                { name: 'Native Client', filename: 'internal-nacl-plugin' }
+            ];
+            return plugins;
+        }
+    });
+
+    // 模拟 languages
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en', 'zh-CN', 'zh']
+    });
+
+    // 移除自动化相关属性
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+    delete window.__webdriver_evaluate;
+    delete window.__selenium_evaluate;
+    delete window.__webdriver_script_function;
+    delete window.__webdriver_script_func;
+    delete window.__webdriver_script_fn;
+    delete window.__fxdriver_evaluate;
+    delete window.__driver_unwrapped;
+    delete window.__webdriver_unwrapped;
+    delete window.__driver_evaluate;
+    delete window.__selenium_unwrapped;
+    delete window.__fxdriver_unwrapped;
+
+    // 模拟 permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+    """
 
 
 class PlaywrightCrawler:
@@ -42,6 +101,15 @@ class PlaywrightCrawler:
                 "args": [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-plugins",
+                    "--disable-background-networking",
+                    "--disable-sync",
+                    "--metrics-recording-only",
+                    "--mute-audio",
+                    "--no-first-run",
                 ],
             }
             browser_type = self.playwright.firefox
@@ -57,6 +125,11 @@ class PlaywrightCrawler:
                     'Accept-Language': 'en-US,en;q=0.9',
                 }
             )
+
+            # 为 Firefox 添加反检测脚本
+            ff_page = await self.context.new_page()
+            await ff_page.add_init_script(build_stealth_script())
+            await ff_page.close()
 
         except Exception as e:
             # Firefox失败，尝试Chromium
@@ -101,15 +174,7 @@ class PlaywrightCrawler:
 
                 # 添加反检测脚本
                 page = await self.context.new_page()
-                await page.add_init_script("""
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined
-                    });
-                    window.navigator.chrome = { runtime: {} };
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => [1, 2, 3, 4, 5]
-                    });
-                """)
+                await page.add_init_script(build_stealth_script())
                 await page.close()
 
             except Exception as e2:
@@ -143,36 +208,39 @@ class PlaywrightCrawler:
 
     async def _fetch_with_playwright(self, url: str) -> Optional[str]:
         """Fetch using Playwright browser"""
-        # 使用已创建的 context 或创建新的
-        created_context = None
-        if hasattr(self, 'context') and self.context:
-            page = await self.context.new_page()
-        else:
-            # 设置视口和上下文
-            created_context = await self.browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                user_agent=self.user_agent or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0",
-                locale="en-US",
-                timezone_id="America/New_York",
-            )
-            page = await created_context.new_page()
+        # 每次都创建新的 context，避免状态污染
+        # 注意：这会有性能开销，但如果网站有反爬机制更稳定
+        created_context = await self.browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent=self.user_agent or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0",
+            locale="en-US",
+            timezone_id="America/New_York",
+        )
+        page = await created_context.new_page()
+
+        # 添加反检测脚本到当前页面
+        await page.add_init_script(build_stealth_script())
 
         try:
-            # 增加超时时间到60秒，使用 wait_until: "domcontentloaded" 更快
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            # 等待页面稳定
-            await page.wait_for_load_state("networkidle", timeout=30000)
-            await self._random_delay()
+            # 使用 commit 等待策略 - 只要收到第一个响应就继续
+            # 这避免了等待所有资源加载（可能被阻塞）
+            response = await page.goto(url, wait_until="commit", timeout=30000)
+
+            # 直接从 response 获取完整的 HTML body
+            # page.content() 可能会被 JS 修改导致内容不完整
+            if response:
+                html_bytes = await response.body()
+                html = html_bytes.decode('utf-8', errors='replace')
+                return html
+
+            # 如果 response 为 None，尝试 page.content() 作为后备
+            await asyncio.sleep(1)
             html = await page.content()
             return html
         except Exception as e:
             raise e  # Re-raise to be caught by fetch()
         finally:
-            # 只关闭我们创建的上下文，共享上下文由 __aexit__ 关闭
-            if created_context:
-                await created_context.close()
-            else:
-                await page.close()
+            await created_context.close()
 
     async def _fetch_with_http(self, url: str) -> Optional[str]:
         """Fallback fetch using httpx"""
