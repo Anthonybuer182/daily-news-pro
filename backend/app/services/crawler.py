@@ -1144,10 +1144,10 @@ class CrawlerEngine:
         for el in elements:
             item = {}
 
-            # 提取链接
+            # 提取链接 - 优先查找标题区域的链接 (h1-h6 a)
+            from urllib.parse import urljoin
             link = el.get('href') or el.get('data-url')
             if link:
-                from urllib.parse import urljoin
                 item['url'] = urljoin(base_url, link)
             else:
                 # 尝试从父元素获取链接
@@ -1155,8 +1155,28 @@ class CrawlerEngine:
                 if parent:
                     item['url'] = parent.get('href')
                     if item['url']:
-                        from urllib.parse import urljoin
                         item['url'] = urljoin(base_url, item['url'])
+                    else:
+                        # 父元素也没有href，查找标题区域 (h1-h6) 内的链接
+                        # 使用 select_one 而不是 find，因为 heading 元素本身没有 href
+                        header_link = el.select_one('h1 a, h2 a, h3 a, h4 a, h5 a, h6 a')
+                        if header_link and header_link.get('href'):
+                            item['url'] = urljoin(base_url, header_link.get('href'))
+                        else:
+                            # 查找元素内部的第一个 <a> 标签
+                            first_link = el.find('a', href=True)
+                            if first_link:
+                                item['url'] = urljoin(base_url, first_link.get('href'))
+                else:
+                    # 没有父元素链接，查找标题区域的链接
+                    header_link = el.select_one('h1 a, h2 a, h3 a, h4 a, h5 a, h6 a')
+                    if header_link and header_link.get('href'):
+                        item['url'] = urljoin(base_url, header_link.get('href'))
+                    else:
+                        # 查找元素内部的第一个 <a> 标签
+                        first_link = el.find('a', href=True)
+                        if first_link:
+                            item['url'] = urljoin(base_url, first_link.get('href'))
 
             # 提取配置的字段
             for field_name, field_config in item_fields.items():
