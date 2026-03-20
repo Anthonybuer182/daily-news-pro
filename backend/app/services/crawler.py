@@ -9,6 +9,8 @@ from app.models import Rule, RuleLevel, Article, Job, Log
 from app.services.playwright_crawler import PlaywrightCrawler
 from app.services.trafilatura_extractor import TrafilaturaExtractor
 from app.services.selector import SelectorParser
+from app.services.extract_engine import ExtractEngine
+from app.services.extract_strategies import StrategyRegistry
 
 
 class CrawlerEngine:
@@ -371,71 +373,63 @@ class CrawlerEngine:
             return await self._crawl_simple_playwright()
 
     async def _crawl_with_config(self, config: Dict) -> Dict:
-        """使用新的统一配置抓取 - 两阶段：列表→详情"""
+        """使用新的统一配置抓取 - 基于策略注册表"""
         list_config = config.get("list", {})
         detail_config = config.get("detail", {})
-        wait_config = config.get("wait", {})
+
+        # 获取策略名称
+        strategy_name = getattr(self.rule, 'strategy', None) or config.get("strategy", "auto")
 
         # 获取列表页 URL
-        list_url = list_config.get("url")
-        if not list_url:
-            list_url = self.rule.source_url
-
+        list_url = list_config.get("url") or self.rule.source_url
         if not list_url:
             raise ValueError("No list page URL provided")
 
         # 获取最大抓取数量配置，默认3条
         max_items = list_config.get("max_items", 3)
-        self._log("info", f"Crawling with unified config, list URL: {list_url}, max_items: {max_items}")
+        self._log("info", f"Crawling with strategy '{strategy_name}', URL: {list_url}, max_items: {max_items}")
 
         async with PlaywrightCrawler(
             user_agent=self.rule.user_agent,
             delay_min=self.rule.delay_min,
             delay_max=self.rule.delay_max,
         ) as crawler:
-            # 检查是否配置了分页
-            pagination = list_config.get("pagination", {})
+            # 抓取页面
+            html = await crawler.fetch(list_url)
+            if not html:
+                raise ValueError(f"Failed to fetch list page: {list_url}")
 
-            if pagination:
-                # 分页抓取
-                all_items = await self._crawl_with_pagination(list_url, list_config, crawler)
+            # 获取策略
+            if strategy_name == "auto":
+                strategy = StrategyRegistry.auto_detect(html, config)
             else:
-                # 单页抓取
-                html = await crawler.fetch(list_url)
-                if not html:
-                    raise ValueError(f"Failed to fetch list page: {list_url}")
+                strategy = StrategyRegistry.get(strategy_name)
 
-                # 检查是否配置了列表字段提取（item_fields）
-                item_fields = list_config.get("item_fields", {})
+            if not strategy:
+                raise ValueError(f"Unknown strategy: {strategy_name}")
 
-                # 检测是否为 Markdown 内容（通过 URL 或内容特征）
-                is_markdown = (
-                    '.md' in list_url.lower() or
-                    'raw.githubusercontent.com' in list_url or
-                    '## ' in html[:500] or  # Markdown 标题特征
-                    html.startswith('#')  # Markdown 文件通常以 # 开头
-                )
+            self._log("info", f"Using strategy: {strategy.name}")
 
-                if item_fields:
-                    all_items = self._extract_list_items_with_config(html, list_config, list_url)
-                elif is_markdown and 'github.com' in html:
-                    # Markdown 内容中提取 GitHub 链接
-                    all_items = self._extract_github_links_from_markdown(html)
-                    self._log("info", f"Detected markdown content, extracted {len(all_items)} GitHub links")
-                else:
-                    # 没有配置 item_fields，使用原来的方式
-                    article_urls = self._extract_links_with_config(html, list_config, list_url)
-                    all_items = [{'url': url} for url in article_urls]
+            # 提取列表项
+            all_items = strategy.extract_list(html, list_config)
+            self._log("info", f"Extracted {len(all_items)} items using strategy")
 
-            self._log("info", f"Extracted {len(all_items)} items from list pages")
+            # 转换相对 URL 为绝对 URL
+            from urllib.parse import urljoin
+            for item in all_items:
+                if item.get('url'):
+                    url = item['url']
+                    # 如果是相对 URL，转换为绝对 URL
+                    if not url.startswith(('http://', 'https://', '//')):
+                        item['url'] = urljoin(list_url, url)
 
             # 过滤链接
             list_items = self._filter_list_items(all_items)
 
-            # 应用最大数量限制（默认抓取前3条）
+            # 应用最大数量限制
             if max_items and len(list_items) > max_items:
                 list_items = list_items[:max_items]
-                self._log("info", f"Limited to {max_items} items per configuration")
+                self._log("info", f"Limited to {max_items} items")
 
             # 保存到数据库（状态为 pending）
             saved_count = self._save_list_items(list_items)
@@ -1142,60 +1136,6 @@ class CrawlerEngine:
                     links.append(full_url)
 
         return list(set(links))
-
-    def _extract_github_links_from_markdown(self, content: str) -> List[Dict]:
-        """从 Markdown 内容中提取 GitHub 仓库链接"""
-        import re
-
-        # 提取所有 GitHub 仓库链接
-        # 匹配 https://github.com/owner/repo 格式
-        github_pattern = r'https://github\.com/([\w\-\.]+)/([\w\-\.]+)'
-        matches = re.findall(github_pattern, content)
-
-        items = []
-        seen = set()
-
-        for owner, repo in matches:
-            # 跳过一些常见的非项目链接
-            if owner in ['solutions', 'security', 'features', 'resources', 'open-source', 'github']:
-                continue
-            if repo in ['github-daily-rank', 'weekly', 'monthly', 'industry', 'advanced-security']:
-                continue
-
-            url = f"https://github.com/{owner}/{repo}"
-            if url in seen:
-                continue
-            seen.add(url)
-
-            # 尝试提取项目名称和描述
-            # 在 URL 前后查找相关信息
-            title = f"{owner} / {repo}"
-
-            # 查找 URL 附近的标题 (通常是粗体或标题格式)
-            pattern = rf'\*\*([^*]+)\*\*.*?{re.escape(url)}|{re.escape(url)}.*?([^*\n]+)'
-            desc_match = re.search(pattern, content[:content.find(url) + 100] if url in content else content[:200])
-
-            description = None
-            if desc_match:
-                desc = desc_match.group(1) or desc_match.group(2)
-                if desc and len(desc) > 5:
-                    description = desc.strip()[:200]
-
-            # 尝试提取星标数
-            stars = None
-            star_pattern = rf'{re.escape(url)}.*?(\d+[\d,\.]*)\s*[⭐★]'
-            star_match = re.search(star_pattern, content)
-            if star_match:
-                stars = star_match.group(1)
-
-            items.append({
-                'url': url,
-                'title': title,
-                'description': description,
-                'stars': stars,
-            })
-
-        return items
 
     def _extract_list_items_with_config(self, html: str, list_config: Dict, base_url: str) -> List[Dict]:
         """Extract list items with basic info (title, summary, etc.)"""

@@ -9,9 +9,76 @@ class RuleBase(BaseModel):
     source_type: str = Field(default="playwright", description="数据源类型：playwright(浏览器渲染抓取，适用于JS加载的页面)、http(直接HTTP请求，速度快)、rss(RSS订阅源)")
     source_url: Optional[str] = Field(default=None, description="要抓取的网页URL，例如：'https://example.com/news'")
 
-    # 通用配置字段 (JSON 格式)
-    field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于将抓取的原始数据映射到目标字段，格式：{'原始字段': '目标字段'}")
-    extract_config: Optional[str] = Field(default=None, description="Playwright抓取配置，JSON格式。最重要的配置项，包含列表选择器、内容选择器、分页等。示例：\n{\n  'list': {\n    'url': 'https://example.com/',\n    'selector': 'a.article-title',  // CSS选择器\n    'max_items': 10  // 最大抓取数量\n  },\n  'detail': {\n    'title': {'selector': 'h1', 'type': 'text'},\n    'content': {'selector': '.article-body', 'type': 'html'}\n  }\n}")
+    # 策略类型：auto 自动检测，或指定策略
+    # 可选值：auto, html_list, rss, api, markdown_github, markdown_generic, xpath, regex
+    strategy: Optional[str] = Field(default="auto", description="提取策略类型：\n• auto：自动检测内容类型\n• html_list：HTML列表提取（默认）\n• rss：RSS/Atom订阅源\n• api：API接口JSON\n• markdown_github：GitHub README中的仓库链接\n• markdown_generic：通用Markdown链接\n• xpath：XPath表达式提取\n• regex：正则表达式提取")
+
+    # 通用配置字段 (JSON 格式) - 统一的 extract_config
+    field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于API/RSS等场景，将原始数据字段映射到目标字段")
+    extract_config: Optional[str] = Field(default=None, description="""提取配置，JSON格式。统一配置格式：
+
+【通用结构】
+{
+  "list": {
+    "selector": "CSS选择器",
+    "xpath": "XPath表达式",
+    "regex": "正则表达式",
+    "fields": {
+      "url": {"op": "css", "selector": "a", "attr": "href"},
+      "title": {"op": "css", "selector": "h2", "type": "text"}
+    },
+    "max_items": 10,
+    "pagination": {...}
+  },
+  "detail": {
+    "fields": {...}
+  }
+}
+
+【支持的提取操作 (op)】
+• css：CSS选择器提取
+• xpath：XPath表达式提取
+• regex：正则表达式提取
+• json_path：JSON路径提取
+• template：模板格式化
+• nearby：附近内容提取
+• chain：链式操作
+• switch：条件选择
+
+【示例 - HTML列表】
+{
+  "list": {
+    "selector": "article.item",
+    "fields": {
+      "title": {"op": "css", "selector": "h2", "type": "text"},
+      "url": {"op": "css", "selector": "a", "attr": "href"},
+      "desc": {"op": "css", "selector": "p", "type": "text"}
+    },
+    "max_items": 10
+  }
+}
+
+【示例 - GitHub README】
+{
+  "strategy": "markdown_github",
+  "list": {
+    "url_pattern": "https://github\\.com/[\\w-]+/[\\w-]+",
+    "skip_owners": ["solutions"],
+    "skip_repos": ["weekly", "monthly"]
+  }
+}
+
+【示例 - RSS】
+{
+  "strategy": "rss",
+  "list": {
+    "fields": {
+      "title": "title",
+      "link": "link",
+      "description": "description"
+    }
+  }
+}""")
     request_config: Optional[str] = Field(default=None, description="API请求配置，JSON格式。当source_type为http时使用，可配置请求方法、参数、认证等")
 
     # 旧的选择器字段 (保留用于兼容)

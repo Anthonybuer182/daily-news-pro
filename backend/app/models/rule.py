@@ -13,6 +13,9 @@ class Rule(Base):
     # 抓取方式: rss, api, playwright
     source_type = Column(String(20), default="playwright")
 
+    # 策略类型: auto, html_list, rss, api, markdown_github, markdown_generic, xpath, regex
+    strategy = Column(String(50), default="auto")
+
     # 统一URL字段（根据 source_type 含义不同）
     source_url = Column(String(500))
 
