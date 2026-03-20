@@ -77,7 +77,7 @@ export default function Articles() {
     { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: true,
       render: (v: string) => v || '-'
     },
-    { title: '抓取方式', dataIndex: 'rule_source_type', key: 'rule_source_type',
+    { title: '传输方式', dataIndex: 'rule_source_type', key: 'rule_source_type',
       render: (v: string) => getSourceTypeTag(v)
     },
     { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,

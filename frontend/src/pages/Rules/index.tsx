@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Tag, message, Popconfirm } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
-import { getRules, deleteRule, enableRule, disableRule, runRule, batchDeleteRules } from '../../api'
+import { getRules, deleteRule, enableRule, disableRule, runRule, batchDeleteRules, batchRunRules } from '../../api'
 import RuleModal from './RuleModal'
 
 export default function Rules() {
@@ -49,6 +49,16 @@ export default function Rules() {
     }
   }
 
+  const handleBatchRun = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchRunRules(selectedRowKeys)
+      message.success(`成功创建 ${selectedRowKeys.length} 个抓取任务`)
+    } catch (error) {
+      message.error('批量执行失败')
+    }
+  }
+
   const handleToggleStatus = async (rule: any) => {
     try {
       if (rule.status === 'enabled') {
@@ -71,6 +81,15 @@ export default function Rules() {
     } catch (error) {
       message.error('创建任务失败')
     }
+  }
+
+  const handleSelectAll = () => {
+    const allIds = rules.map((rule: any) => rule.id)
+    setSelectedRowKeys(allIds)
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedRowKeys([])
   }
 
   // 传输方式标签映射
@@ -126,12 +145,27 @@ export default function Rules() {
         }}>
           新建规则
         </Button>
+        <Button icon={<PlayCircleOutlined />} onClick={handleSelectAll} style={{ marginLeft: 8 }}>
+          全选
+        </Button>
+        {rules.length > 0 && selectedRowKeys.length < rules.length && (
+          <Button onClick={handleDeselectAll} style={{ marginLeft: 8 }}>
+            取消全选
+          </Button>
+        )}
         {selectedRowKeys.length > 0 && (
-          <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条规则吗?`} onConfirm={handleBatchDelete}>
-            <Button danger icon={<BatchDeleteOutlined />} style={{ marginLeft: 8 }}>
-              批量删除 ({selectedRowKeys.length})
-            </Button>
-          </Popconfirm>
+          <>
+            <Popconfirm title={`确定执行选中的 ${selectedRowKeys.length} 条规则吗?`} onConfirm={handleBatchRun}>
+              <Button type="primary" icon={<PlayCircleOutlined />} style={{ marginLeft: 8 }}>
+                批量执行 ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
+            <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条规则吗?`} onConfirm={handleBatchDelete}>
+              <Button danger icon={<BatchDeleteOutlined />} style={{ marginLeft: 8 }}>
+                批量删除 ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
+          </>
         )}
       </div>
       <Table

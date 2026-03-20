@@ -15,6 +15,7 @@ export const batchDeleteRules = (ids: number[]) => api.post('/rules/batch-delete
 export const enableRule = (id: number) => api.post(`/rules/${id}/enable`)
 export const disableRule = (id: number) => api.post(`/rules/${id}/disable`)
 export const runRule = (id: number) => api.post(`/rules/${id}/run`)
+export const batchRunRules = (ids: number[]) => api.post('/rules/batch-run', ids)
 export const getRuleLevels = (id: number) => api.get(`/rules/${id}/levels`)
 export const createRuleLevel = (ruleId: number, data: any) => api.post(`/rules/${ruleId}/levels`, data)
 export const updateRuleLevel = (ruleId: number, levelId: number, data: any) => api.put(`/rules/${ruleId}/levels/${levelId}`, data)
