@@ -6,12 +6,33 @@ from app.schemas.rule_level import RuleLevel
 
 class RuleBase(BaseModel):
     name: str = Field(..., description="规则名称，用于标识抓取任务，例如：'Pakistan Today 新闻'")
-    source_type: str = Field(default="playwright", description="数据源类型：playwright(浏览器渲染抓取，适用于JS加载的页面)、http(直接HTTP请求，速度快)、rss(RSS订阅源)")
-    source_url: Optional[str] = Field(default=None, description="要抓取的网页URL，例如：'https://example.com/news'")
 
-    # 策略类型：auto 自动检测，或指定策略
-    # 可选值：auto, html_list, rss, api, markdown_github, markdown_generic, xpath, regex
-    strategy: Optional[str] = Field(default="auto", description="提取策略类型：\n• auto：自动检测内容类型\n• html_list：HTML列表提取（默认）\n• rss：RSS/Atom订阅源\n• api：API接口JSON\n• markdown_github：GitHub README中的仓库链接\n• markdown_generic：通用Markdown链接\n• xpath：XPath表达式提取\n• regex：正则表达式提取")
+    # ============ 两个维度设计 ============
+    # 维度1: render (是否需要浏览器渲染)
+    # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
+    # 可不设置，会根据 content_type 或 source_type 自动推断
+    render: Optional[str] = Field(default=None, description="""渲染方式（传输层）：
+• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）
+• browser：浏览器渲染抓取，适用于JS加载的动态页面
+• 不设置：根据 content_type 自动推断""")
+
+    # 维度2: content_type (返回内容格式)
+    # 可选值: html, xml, json, markdown, text
+    # 可不设置，会根据 source_type 或 strategy 自动推断
+    content_type: Optional[str] = Field(default=None, description="""内容格式：
+• html：HTML 网页（默认）
+• xml：XML 格式（RSS/Atom）
+• json：JSON API 接口
+• markdown：Markdown 文件（如 GitHub README）
+• text：纯文本
+• 不设置：根据 source_type 或 strategy 自动推断""")
+
+    source_url: Optional[str] = Field(default=None, description="要抓取的 URL，例如：'https://example.com/news'")
+
+    # ============ 旧字段 (保留用于兼容) ============
+    # 旧版字段
+    source_type: Optional[str] = Field(default=None, description="(废弃) 旧版字段，请使用 render + content_type")
+    strategy: Optional[str] = Field(default="auto", description="(废弃) 旧版字段，请使用 content_type")
 
     # 通用配置字段 (JSON 格式) - 统一的 extract_config
     field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于API/RSS等场景，将原始数据字段映射到目标字段")

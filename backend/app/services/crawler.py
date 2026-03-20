@@ -37,20 +37,20 @@ class CrawlerEngine:
         self.job.started_at = datetime.utcnow()
         self.db.commit()
 
-        self._log("info", f"Starting crawl for rule: {self.rule.name}, type: {self.rule.source_type}")
+        # 使用新的两个维度
+        render = self.rule.get_render()
+        content_type = self.rule.get_content_type()
+
+        self._log("info", f"Starting crawl for rule: {self.rule.name}, render: {render}, content_type: {content_type}")
 
         try:
-            # 根据 source_type 分发处理
-            source_type = self.rule.source_type or "playwright"
-
-            if source_type == "rss":
-                result = await self._crawl_rss()
-            elif source_type == "api":
-                result = await self._crawl_api()
-            elif source_type == "playwright":
-                result = await self._crawl_playwright()
+            # 根据 render 分发处理
+            if render == "http":
+                result = await self._crawl_http()
+            elif render == "browser":
+                result = await self._crawl_browser()
             else:
-                raise ValueError(f"Unknown source_type: {source_type}")
+                raise ValueError(f"Unknown render: {render}")
 
             self.job.status = "success"
             self.job.finished_at = datetime.utcnow()
@@ -64,57 +64,7 @@ class CrawlerEngine:
         self.db.commit()
         return {"job_id": self.job_id, "status": self.job.status}
 
-    async def _crawl_rss(self) -> Dict:
-        """RSS 订阅源抓取"""
-        import httpx
-        from bs4 import BeautifulSoup
-
-        url = self.rule.source_url
-        if not url:
-            raise ValueError("No RSS URL provided")
-
-        self._log("info", f"Fetching RSS feed: {url}")
-
-        try:
-            # 获取 RSS 内容
-            headers = {"User-Agent": self.rule.user_agent or "DailyNewsCrawler/1.0"}
-            response = httpx.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            xml_content = response.text
-
-            # 解析 RSS
-            soup = BeautifulSoup(xml_content, 'xml')
-            items = soup.find_all('item') or soup.find_all('entry')
-
-            if not items:
-                self._log("warning", "No items found in RSS feed")
-                return {"total": 0, "success": 0, "failed": 0}
-
-            # 获取字段映射配置
-            field_mapping = self._get_field_mapping()
-
-            success_count = 0
-            failed_count = 0
-
-            for item in items:
-                try:
-                    article = self._extract_rss_item(item, field_mapping)
-                    if article:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                except Exception as e:
-                    self._log("error", f"Failed to extract RSS item: {e}")
-                    failed_count += 1
-
-            self.job.articles_count = len(items)
-            self.job.success_count = success_count
-            self.job.failed_count = failed_count
-
-            return {"total": len(items), "success": success_count, "failed": failed_count}
-
-        except Exception as e:
-            raise ValueError(f"RSS crawl failed: {e}")
+    # _crawl_feed 已删除，使用 _parse_xml_response 替代
 
     def _extract_rss_item(self, item, field_mapping: Dict) -> Optional[Article]:
         """从 RSS item 中提取文章"""
@@ -215,15 +165,16 @@ class CrawlerEngine:
         except:
             return {}
 
-    async def _crawl_api(self) -> Dict:
-        """API 接口抓取"""
+    async def _crawl_http(self) -> Dict:
+        """HTTP 抓取 - 根据 content_type 解析内容"""
         import httpx
 
         url = self.rule.source_url
         if not url:
-            raise ValueError("No API URL provided")
+            raise ValueError("No source URL provided")
 
-        self._log("info", f"Fetching API: {url}")
+        content_type = self.rule.get_content_type()
+        self._log("info", f"Fetching URL: {url}, content_type: {content_type}")
 
         try:
             # 获取请求配置
@@ -250,41 +201,111 @@ class CrawlerEngine:
 
             response = httpx.get(url, headers=headers, timeout=30)
             response.raise_for_status()
-            data = response.json()
 
-            # 获取字段映射
-            field_mapping = self._get_field_mapping()
-
-            # 处理返回数据（支持数组或对象中的 items）
-            items = data
-            if isinstance(data, dict):
-                items = data.get("items", data.get("data", [data]))
-
-            if not isinstance(items, list):
-                items = [items]
-
-            success_count = 0
-            failed_count = 0
-
-            for item in items:
-                try:
-                    article = self._extract_api_item(item, field_mapping)
-                    if article:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                except Exception as e:
-                    self._log("error", f"Failed to extract API item: {e}")
-                    failed_count += 1
-
-            self.job.articles_count = len(items)
-            self.job.success_count = success_count
-            self.job.failed_count = failed_count
-
-            return {"total": len(items), "success": success_count, "failed": failed_count}
+            # 根据 content_type 解析
+            if content_type == "json":
+                return await self._parse_json_response(response)
+            elif content_type == "xml":
+                return await self._parse_xml_response(response)
+            elif content_type == "markdown":
+                return await self._parse_markdown_response(response)
+            else:
+                # html 或 text 都当作 markdown_github 风格处理
+                return await self._parse_markdown_response(response)
 
         except Exception as e:
-            raise ValueError(f"API crawl failed: {e}")
+            raise ValueError(f"HTTP crawl failed: {e}")
+
+    async def _parse_json_response(self, response) -> Dict:
+        """解析 JSON 响应"""
+        data = response.json()
+        field_mapping = self._get_field_mapping()
+
+        # 处理返回数据
+        items = data
+        if isinstance(data, dict):
+            items = data.get("items", data.get("data", [data]))
+
+        if not isinstance(items, list):
+            items = [items]
+
+        success_count = 0
+        failed_count = 0
+
+        for item in items:
+            try:
+                article = self._extract_api_item(item, field_mapping)
+                if article:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                self._log("error", f"Failed to extract API item: {e}")
+                failed_count += 1
+
+        self.job.articles_count = len(items)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {"total": len(items), "success": success_count, "failed": failed_count}
+
+    async def _parse_xml_response(self, response) -> Dict:
+        """解析 XML/RSS 响应"""
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(response.text, 'xml')
+        items = soup.find_all('item') or soup.find_all('entry')
+
+        if not items:
+            self._log("warning", "No items found in RSS feed")
+            return {"total": 0, "success": 0, "failed": 0}
+
+        field_mapping = self._get_field_mapping()
+        success_count = 0
+        failed_count = 0
+
+        for item in items:
+            try:
+                article = self._extract_rss_item(item, field_mapping)
+                if article:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                self._log("error", f"Failed to extract RSS item: {e}")
+                failed_count += 1
+
+        self.job.articles_count = len(items)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {"total": len(items), "success": success_count, "failed": failed_count}
+
+    async def _parse_markdown_response(self, response) -> Dict:
+        """解析 Markdown 响应 (如 GitHub README)"""
+        content = response.text
+
+        # 使用 StrategyRegistry 解析
+        strategy = StrategyRegistry.get("markdown_github")
+        if not strategy:
+            raise ValueError("markdown_github strategy not found")
+
+        list_config = self._get_extract_config().get("list", {})
+        if not list_config:
+            list_config = {"url_pattern": r"https://github\.com/[\w\-]+/[\w\-]+"}
+
+        items = strategy.extract_list(content, list_config)
+        self._log("info", f"Extracted {len(items)} items from markdown")
+
+        if not items:
+            return {"total": 0, "success": 0, "failed": 0}
+
+        # 保存列表项
+        saved_count = self._save_list_items(items)
+        self._log("info", f"Saved {saved_count} pending articles")
+
+        # 抓取详情
+        return await self._extract_pending_articles_http({})
 
     def _extract_api_item(self, item: Dict, field_mapping: Dict) -> Optional[Article]:
         """从 API 响应中提取文章"""
@@ -359,7 +380,85 @@ class CrawlerEngine:
 
         return str(current) if current is not None else None
 
-    async def _crawl_playwright(self) -> Dict:
+    async def _extract_pending_articles_http(self, detail_config: Dict) -> Dict:
+        """使用 httpx 抓取 pending 状态的详情页"""
+        from app.models import Article
+        import httpx
+
+        pending_articles = self.db.query(Article).filter(
+            Article.rule_id == self.rule.id,
+            Article.status == "pending"
+        ).all()
+
+        if not pending_articles:
+            self._log("info", "No pending articles to fetch")
+            return {"total": 0, "success": 0, "failed": 0}
+
+        self._log("info", f"Fetching details for {len(pending_articles)} pending articles (http mode)")
+
+        success_count = 0
+        failed_count = 0
+
+        for article in pending_articles:
+            try:
+                url = article.url
+                headers = {"User-Agent": self.rule.user_agent or "DailyNewsCrawler/1.0"}
+                response = httpx.get(url, headers=headers, timeout=30)
+                response.raise_for_status()
+                html = response.text
+
+                if not html:
+                    article.status = "failed"
+                    article.error_message = "Empty response"
+                    failed_count += 1
+                    continue
+
+                # 提取内容
+                if detail_config:
+                    content = self._extract_with_config(html, detail_config)
+                    if not content.get("text") and not content.get("content"):
+                        content = TrafilaturaExtractor.extract_with_fallback(html)
+                else:
+                    content = TrafilaturaExtractor.extract_with_fallback(html)
+
+                # 更新文章
+                if not article.title and content.get("title"):
+                    article.title = content.get("title")
+                if not article.summary and content.get("text"):
+                    article.summary = content.get("text")[:500]
+                if not article.author and content.get("author"):
+                    article.author = content.get("author")
+                if not article.publish_time and content.get("date"):
+                    article.publish_time = self._parse_date(content.get("date"))
+                if not article.cover_image and content.get("image"):
+                    article.cover_image = content.get("image")
+
+                # 生成 markdown
+                markdown_content = self._generate_markdown(content, url)
+                markdown_file = self._save_markdown(markdown_content, url)
+                article.markdown_file = markdown_file
+                article.status = "success"
+                self.db.commit()
+                success_count += 1
+
+            except Exception as e:
+                self._log("error", f"Failed to fetch {article.url}: {e}")
+                article.status = "failed"
+                article.error_message = str(e)
+                self.db.commit()
+                failed_count += 1
+
+        self.job.articles_count = len(pending_articles)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {
+            "total": len(pending_articles),
+            "success": success_count,
+            "failed": failed_count,
+        }
+
+    async def _crawl_browser(self) -> Dict:
         """Playwright + Trafilatura 抓取"""
         # 检查是否有新的 extract_config 配置
         extract_config = self._get_extract_config()
@@ -854,8 +953,10 @@ class CrawlerEngine:
         """Extract links from pages"""
         all_links = []
 
-        # Use Playwright for link extraction if source_type is playwright
-        if self.rule.source_type == "playwright":
+        # 使用获取方式决定提取策略
+        fetch_method = self.rule.get_fetch_method()
+
+        if fetch_method == "playwright":
             async with PlaywrightCrawler(
                 user_agent=self.rule.user_agent,
                 delay_min=self.rule.delay_min,
@@ -864,11 +965,11 @@ class CrawlerEngine:
                 html = await self._fetch_with_method(urls[0], crawler)
                 if html:
                     all_links = self._extract_links_from_html(html, urls[0], level)
-        elif self.rule.source_type == "api":
-            # API mode - skip link extraction, handled in _crawl_api
+        elif fetch_method == "http":
+            # HTTP/API mode - skip link extraction, handled in _crawl_http
             pass
         else:
-            # Use httpx for RSS mode
+            # feed mode - use httpx
             for url in urls:
                 self._log("info", f"Extracting links from: {url}")
                 html = self._fetch_with_httpx(url)
@@ -1007,7 +1108,7 @@ class CrawlerEngine:
             self._log("info", f"Article already exists: {url}")
             return existing
 
-        # Fetch based on source_type (only playwright is used here)
+        # Fetch article content - use Playwright as primary, fallback to httpx
         html = None
         async with PlaywrightCrawler(
             user_agent=self.rule.user_agent,

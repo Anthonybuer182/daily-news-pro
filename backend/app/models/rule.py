@@ -10,14 +10,88 @@ class Rule(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
 
-    # 抓取方式: rss, api, playwright
-    source_type = Column(String(20), default="playwright")
+    # ============ 两个维度设计 ============
+    # 维度1: render (是否需要浏览器渲染)
+    # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
+    render = Column(String(20), nullable=True)
 
-    # 策略类型: auto, html_list, rss, api, markdown_github, markdown_generic, xpath, regex
+    # 维度2: content_type (返回内容格式)
+    # 可选值: html, xml, json, markdown, text
+    content_type = Column(String(20), nullable=True)
+
+    # 统一URL字段
+    source_url = Column(String(500))
+
+    # ============ 旧字段 (保留用于兼容) ============
+    # 旧版字段: source_type, strategy
+    source_type = Column(String(20), default="playwright")
     strategy = Column(String(50), default="auto")
 
-    # 统一URL字段（根据 source_type 含义不同）
-    source_url = Column(String(500))
+    def get_render(self) -> str:
+        """
+        获取有效的渲染方式（自动推断逻辑）
+
+        推断优先级:
+        1. 如果 render 已设置，直接使用
+        2. 根据 content_type 推断
+        3. 根据 strategy 推断
+        4. 根据 source_type 推断（旧版兼容）
+        """
+        # 1. 优先使用新字段
+        if self.render:
+            return self.render
+
+        # 2. 根据 content_type 推断
+        ct = self.content_type or ""
+        if ct in ("xml", "json", "markdown", "text"):
+            return "http"
+        if ct == "html":
+            return "browser"  # HTML 默认需要浏览器渲染
+
+        # 3. 根据旧版 strategy 推断
+        strategy = self.strategy or ""
+        if strategy.startswith("markdown_"):
+            return "http"
+        if strategy in ("rss", "xml", "json", "api"):
+            return "http"
+
+        # 4. 根据旧版 source_type 推断
+        source_type = self.source_type or "playwright"
+        if source_type in ("rss", "api", "http"):
+            return "http"
+        return "browser"
+
+    def get_content_type(self) -> str:
+        """
+        获取有效的内容类型（自动推断逻辑）
+
+        推断优先级:
+        1. 如果 content_type 已设置，直接使用
+        2. 根据 strategy 推断
+        3. 根据 source_type 推断（旧版兼容）
+        """
+        # 1. 优先使用新字段
+        if self.content_type:
+            return self.content_type
+
+        # 2. 根据旧版 strategy 推断
+        strategy = self.strategy or ""
+        if strategy.startswith("markdown_"):
+            return "markdown"
+        if strategy in ("rss", "feed"):
+            return "xml"
+        if strategy == "json":
+            return "json"
+        if strategy in ("xpath", "html_list", "regex"):
+            return "html"
+
+        # 3. 根据旧版 source_type 推断
+        source_type = self.source_type or ""
+        if source_type == "rss":
+            return "xml"
+        if source_type == "api":
+            return "json"
+        return "html"  # 默认 HTML
 
     # ============ 通用配置字段 (JSON 格式) ============
     # field_mapping: RSS/API 字段映射配置
