@@ -22,6 +22,9 @@ class Rule(Base):
     # 统一URL字段
     source_url = Column(String(500))
 
+    # fetch_method: HTTP 请求方式 (httpx/playwright)
+    fetch_method = Column(String(20))
+
     # ============ 旧字段 (保留用于兼容) ============
     # 旧版字段: source_type, strategy
     source_type = Column(String(20), default="playwright")
@@ -92,6 +95,25 @@ class Rule(Base):
         if source_type == "api":
             return "json"
         return "html"  # 默认 HTML
+
+    def get_fetch_method(self) -> str:
+        """
+        获取有效的请求方式（自动推断逻辑）
+
+        推断优先级:
+        1. 如果 fetch_method 已设置，直接使用
+        2. 根据 render 推断
+        3. 根据 source_type 推断（旧版兼容）
+        """
+        # 1. 优先使用新字段
+        if self.fetch_method:
+            return self.fetch_method
+
+        # 2. 根据 render 推断
+        render = self.get_render()
+        if render == "browser":
+            return "playwright"
+        return "httpx"
 
     # ============ 通用配置字段 (JSON 格式) ============
     # field_mapping: RSS/API 字段映射配置

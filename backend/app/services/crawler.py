@@ -68,6 +68,8 @@ class CrawlerEngine:
 
     def _extract_rss_item(self, item, field_mapping: Dict) -> Optional[Article]:
         """从 RSS item 中提取文章"""
+        from bs4 import BeautifulSoup
+
         # 默认字段映射
         title_field = field_mapping.get("title", "title")
         link_field = field_mapping.get("link", "link")
@@ -84,6 +86,12 @@ class CrawlerEngine:
 
         if not url:
             return None
+
+        # 检查是否需要去除 HTML 标签（通过配置控制）
+        strip_html = field_mapping.get("strip_html", False)
+        if strip_html and content:
+            soup = BeautifulSoup(content, 'html.parser')
+            content = soup.get_text(separator='\n', strip=True)
 
         # 检查是否已存在
         existing = self.db.query(Article).filter(Article.url == url).first()
@@ -119,9 +127,42 @@ class CrawlerEngine:
         return article
 
     def _get_rss_field(self, item, field: str) -> Optional[str]:
-        """获取 RSS item 的字段"""
+        """获取 RSS/Atom item 的字段"""
         if not field:
             return None
+
+        # 特殊处理 link 字段 (Atom feed 中 link 的 URL 在 href 属性里)
+        if field.lower() == "link":
+            # 尝试找 link 元素并获取 href 属性
+            link_elem = item.find("link")
+            if link_elem:
+                href = link_elem.get("href")
+                if href:
+                    return href
+                return link_elem.get_text(strip=True)
+            # 也尝试大写
+            link_elem = item.find("LINK")
+            if link_elem:
+                href = link_elem.get("href")
+                if href:
+                    return href
+                return link_elem.get_text(strip=True)
+
+        # 特殊处理 author 字段 (Atom feed 中 author 有嵌套的 name)
+        if field.lower() == "author":
+            author_elem = item.find("author")
+            if author_elem:
+                # 尝试找嵌套的 name 元素
+                name_elem = author_elem.find("name")
+                if name_elem:
+                    return name_elem.get_text(strip=True)
+                return author_elem.get_text(strip=True)
+            author_elem = item.find("AUTHOR")
+            if author_elem:
+                name_elem = author_elem.find("NAME")
+                if name_elem:
+                    return name_elem.get_text(strip=True)
+                return author_elem.get_text(strip=True)
 
         # 尝试不同的大小写形式
         element = item.find(field.lower())
@@ -132,7 +173,7 @@ class CrawlerEngine:
         if element:
             return element.get_text(strip=True)
 
-        # 尝试直接获取
+        # 尝试直接获取属性
         return item.get(field)
 
     def _get_field_mapping(self) -> Dict:
@@ -168,6 +209,7 @@ class CrawlerEngine:
     async def _crawl_http(self) -> Dict:
         """HTTP 抓取 - 根据 content_type 解析内容"""
         import httpx
+        import subprocess
 
         url = self.rule.source_url
         if not url:
@@ -199,19 +241,43 @@ class CrawlerEngine:
                 url = url.replace("{{days_ago}}", date)
                 self._log("info", f"Using date: {date} for API query")
 
-            response = httpx.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
+            # 尝试用 httpx 获取，失败则用 curl
+            response_text = None
+            try:
+                response = httpx.get(
+                    url,
+                    headers=headers,
+                    timeout=30,
+                    verify=False
+                )
+                response.raise_for_status()
+                response_text = response.text
+            except Exception as e:
+                self._log("warning", f"httpx failed: {e}, trying curl")
+                # 用 curl 作为后备
+                curl_cmd = ['curl', '-s', '--max-time', '30', url]
+                if headers:
+                    for k, v in headers.items():
+                        curl_cmd.extend(['-H', f'{k}: {v}'])
+                result = subprocess.run(curl_cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    response_text = result.stdout
+                else:
+                    raise ValueError(f"curl also failed: {result.stderr}")
+
+            if response_text is None:
+                raise ValueError("Failed to get response with both httpx and curl")
 
             # 根据 content_type 解析
             if content_type == "json":
-                return await self._parse_json_response(response)
+                return await self._parse_json_response_text(response_text)
             elif content_type == "xml":
-                return await self._parse_xml_response(response)
+                return await self._parse_xml_response_text(response_text)
             elif content_type == "markdown":
-                return await self._parse_markdown_response(response)
+                return await self._parse_markdown_response_text(response_text)
             else:
                 # html 或 text 都当作 markdown_github 风格处理
-                return await self._parse_markdown_response(response)
+                return await self._parse_markdown_response_text(response_text)
 
         except Exception as e:
             raise ValueError(f"HTTP crawl failed: {e}")
@@ -295,6 +361,103 @@ class CrawlerEngine:
             list_config = {"url_pattern": r"https://github\.com/[\w\-]+/[\w\-]+"}
 
         items = strategy.extract_list(content, list_config)
+        self._log("info", f"Extracted {len(items)} items from markdown")
+
+        if not items:
+            return {"total": 0, "success": 0, "failed": 0}
+
+        # 保存列表项
+        saved_count = self._save_list_items(items)
+        self._log("info", f"Saved {saved_count} pending articles")
+
+        # 抓取详情
+        return await self._extract_pending_articles_http({})
+
+    async def _parse_json_response_text(self, text: str) -> Dict:
+        """解析 JSON 响应（文本版本）"""
+        import json
+        data = json.loads(text)
+        field_mapping = self._get_field_mapping()
+
+        # 处理返回数据
+        items = data
+        if isinstance(data, dict):
+            items = data.get("items", data.get("data", [data]))
+
+        if not isinstance(items, list):
+            items = [items]
+
+        success_count = 0
+        failed_count = 0
+
+        for item in items:
+            try:
+                article = self._extract_api_item(item, field_mapping)
+                if article:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                self._log("error", f"Failed to extract API item: {e}")
+                failed_count += 1
+
+        self.job.articles_count = len(items)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {"total": len(items), "success": success_count, "failed": failed_count}
+
+    async def _parse_xml_response_text(self, text: str) -> Dict:
+        """解析 XML/RSS 响应（文本版本）"""
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(text, 'xml')
+        items = soup.find_all('item') or soup.find_all('entry')
+
+        if not items:
+            self._log("warning", "No items found in RSS/Atom feed")
+            return {"total": 0, "success": 0, "failed": 0}
+
+        # 获取 max_items 限制
+        extract_config = self._get_extract_config()
+        max_items = extract_config.get("max_items") or extract_config.get("list", {}).get("max_items")
+        if max_items:
+            items = items[:max_items]
+            self._log("info", f"Limited to {max_items} items (total available: {len(soup.find_all('item') or soup.find_all('entry'))})")
+
+        field_mapping = self._get_field_mapping()
+        success_count = 0
+        failed_count = 0
+
+        for item in items:
+            try:
+                article = self._extract_rss_item(item, field_mapping)
+                if article:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                self._log("error", f"Failed to extract RSS item: {e}")
+                failed_count += 1
+
+        self.job.articles_count = len(items)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {"total": len(items), "success": success_count, "failed": failed_count}
+
+    async def _parse_markdown_response_text(self, text: str) -> Dict:
+        """解析 Markdown 响应（文本版本）"""
+        # 使用 StrategyRegistry 解析
+        strategy = StrategyRegistry.get("markdown_github")
+        if not strategy:
+            raise ValueError("markdown_github strategy not found")
+
+        list_config = self._get_extract_config().get("list", {})
+        if not list_config:
+            list_config = {"url_pattern": r"https://github\.com/[\w\-]+/[\w\-]+"}
+
+        items = strategy.extract_list(text, list_config)
         self._log("info", f"Extracted {len(items)} items from markdown")
 
         if not items:

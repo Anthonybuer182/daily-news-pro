@@ -29,6 +29,12 @@ class RuleBase(BaseModel):
 
     source_url: Optional[str] = Field(default=None, description="要抓取的 URL，例如：'https://example.com/news'")
 
+    # 传输方式: httpx (直接HTTP请求) 或 playwright (浏览器渲染)
+    fetch_method: Optional[str] = Field(default=None, description="""传输方式：
+• httpx：直接HTTP请求，速度快
+• playwright：浏览器渲染抓取，适用于JS加载的动态页面
+• 不设置：根据 render 自动推断""")
+
     # ============ 旧字段 (保留用于兼容) ============
     # 旧版字段
     source_type: Optional[str] = Field(default=None, description="(废弃) 旧版字段，请使用 render + content_type")

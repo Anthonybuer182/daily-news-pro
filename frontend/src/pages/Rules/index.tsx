@@ -73,14 +73,18 @@ export default function Rules() {
     }
   }
 
-  // 抓取方式标签映射
-  const getSourceTypeTag = (type: string) => {
-    const tagMap: Record<string, { color: string; text: string }> = {
-      rss: { color: 'orange', text: 'RSS' },
-      api: { color: 'blue', text: 'API' },
-      playwright: { color: 'green', text: '网页抓取' },
+  // 传输方式标签映射
+  const getFetchMethodTag = (record: any) => {
+    // 优先使用 fetch_method，否则根据 render 推断
+    let method = record.fetch_method
+    if (!method) {
+      method = record.render === 'browser' ? 'playwright' : 'httpx'
     }
-    const tag = tagMap[type] || { color: 'default', text: type }
+    const tagMap: Record<string, { color: string; text: string }> = {
+      httpx: { color: 'blue', text: 'HTTP' },
+      playwright: { color: 'green', text: '浏览器' },
+    }
+    const tag = tagMap[method] || { color: 'default', text: method }
     return <Tag color={tag.color}>{tag.text}</Tag>
   }
 
@@ -88,8 +92,8 @@ export default function Rules() {
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name' },
     { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true },
-    { title: '抓取方式', dataIndex: 'source_type', key: 'source_type',
-      render: (type: string) => getSourceTypeTag(type)
+    { title: '传输方式', key: 'fetch_method',
+      render: (_: any, record: any) => getFetchMethodTag(record)
     },
     { title: '状态', dataIndex: 'status', key: 'status',
       render: (status: string) => (
