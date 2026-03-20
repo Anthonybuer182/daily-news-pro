@@ -1,5 +1,5 @@
 """
-数据库迁移脚本：为 rules 表添加 render 和 content_type 字段
+数据库迁移脚本：为 rules 表添加缺失字段
 
 用法：
     python -m migrations.add_render_content_type
@@ -16,28 +16,57 @@ def migrate(db_path: str):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # 检查列是否已存在
     cursor.execute("PRAGMA table_info(rules)")
     columns = [col[1] for col in cursor.fetchall()]
+    print(f"当前列: {columns}")
 
-    if "render" in columns:
-        print("render 列已存在，跳过")
-    else:
-        cursor.execute("ALTER TABLE rules ADD COLUMN render VARCHAR(20)")
-        print("成功添加 render 列")
+    columns_to_add = {
+        "render": "VARCHAR(20)",
+        "content_type": "VARCHAR(20)",
+        "fetch_method": "VARCHAR(20)",
+        "strategy": "VARCHAR(50) DEFAULT 'auto'",
+        "source_url": "VARCHAR(500)",
+        "source_type": "VARCHAR(20) DEFAULT 'playwright'",
+        "field_mapping": "TEXT",
+        "extract_config": "TEXT",
+        "request_config": "TEXT",
+        "list_selector_type": "VARCHAR(50) DEFAULT 'css'",
+        "list_selector": "VARCHAR(1000)",
+        "list_item_selector": "VARCHAR(1000)",
+        "detail_url_pattern": "VARCHAR(1000)",
+        "title_selector_type": "VARCHAR(50) DEFAULT 'css'",
+        "title_selector": "VARCHAR(1000)",
+        "content_selector_type": "VARCHAR(50) DEFAULT 'css'",
+        "content_selector": "VARCHAR(1000)",
+        "author_selector_type": "VARCHAR(50) DEFAULT 'css'",
+        "author_selector": "VARCHAR(1000)",
+        "publish_time_selector_type": "VARCHAR(50) DEFAULT 'css'",
+        "publish_time_selector": "VARCHAR(1000)",
+        "cover_image_selector": "VARCHAR(1000)",
+        "exclude_patterns": "TEXT",
+        "cookie_config": "TEXT",
+        "headers_config": "TEXT",
+        "auth_type": "VARCHAR(50) DEFAULT 'none'",
+        "auth_config": "TEXT",
+        "proxy_config": "VARCHAR(500)",
+        "delay_min": "INTEGER DEFAULT 1",
+        "delay_max": "INTEGER DEFAULT 3",
+        "user_agent": "VARCHAR(500)",
+        "cron_expression": "VARCHAR(100)",
+    }
 
-    if "content_type" in columns:
-        print("content_type 列已存在，跳过")
-    else:
-        cursor.execute("ALTER TABLE rules ADD COLUMN content_type VARCHAR(20)")
-        print("成功添加 content_type 列")
+    for col_name, col_type in columns_to_add.items():
+        if col_name in columns:
+            print(f"{col_name} 列已存在，跳过")
+        else:
+            cursor.execute(f"ALTER TABLE rules ADD COLUMN {col_name} {col_type}")
+            print(f"成功添加 {col_name} 列")
 
     conn.commit()
     conn.close()
     return True
 
 if __name__ == "__main__":
-    # 默认数据库路径
     db_path = os.path.join(os.path.dirname(__file__), "..", "data", "database.db")
     db_path = os.path.abspath(db_path)
 
