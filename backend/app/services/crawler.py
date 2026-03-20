@@ -407,8 +407,21 @@ class CrawlerEngine:
 
                 # 检查是否配置了列表字段提取（item_fields）
                 item_fields = list_config.get("item_fields", {})
+
+                # 检测是否为 Markdown 内容（通过 URL 或内容特征）
+                is_markdown = (
+                    '.md' in list_url.lower() or
+                    'raw.githubusercontent.com' in list_url or
+                    '## ' in html[:500] or  # Markdown 标题特征
+                    html.startswith('#')  # Markdown 文件通常以 # 开头
+                )
+
                 if item_fields:
                     all_items = self._extract_list_items_with_config(html, list_config, list_url)
+                elif is_markdown and 'github.com' in html:
+                    # Markdown 内容中提取 GitHub 链接
+                    all_items = self._extract_github_links_from_markdown(html)
+                    self._log("info", f"Detected markdown content, extracted {len(all_items)} GitHub links")
                 else:
                     # 没有配置 item_fields，使用原来的方式
                     article_urls = self._extract_links_with_config(html, list_config, list_url)
@@ -1129,6 +1142,60 @@ class CrawlerEngine:
                     links.append(full_url)
 
         return list(set(links))
+
+    def _extract_github_links_from_markdown(self, content: str) -> List[Dict]:
+        """从 Markdown 内容中提取 GitHub 仓库链接"""
+        import re
+
+        # 提取所有 GitHub 仓库链接
+        # 匹配 https://github.com/owner/repo 格式
+        github_pattern = r'https://github\.com/([\w\-\.]+)/([\w\-\.]+)'
+        matches = re.findall(github_pattern, content)
+
+        items = []
+        seen = set()
+
+        for owner, repo in matches:
+            # 跳过一些常见的非项目链接
+            if owner in ['solutions', 'security', 'features', 'resources', 'open-source', 'github']:
+                continue
+            if repo in ['github-daily-rank', 'weekly', 'monthly', 'industry', 'advanced-security']:
+                continue
+
+            url = f"https://github.com/{owner}/{repo}"
+            if url in seen:
+                continue
+            seen.add(url)
+
+            # 尝试提取项目名称和描述
+            # 在 URL 前后查找相关信息
+            title = f"{owner} / {repo}"
+
+            # 查找 URL 附近的标题 (通常是粗体或标题格式)
+            pattern = rf'\*\*([^*]+)\*\*.*?{re.escape(url)}|{re.escape(url)}.*?([^*\n]+)'
+            desc_match = re.search(pattern, content[:content.find(url) + 100] if url in content else content[:200])
+
+            description = None
+            if desc_match:
+                desc = desc_match.group(1) or desc_match.group(2)
+                if desc and len(desc) > 5:
+                    description = desc.strip()[:200]
+
+            # 尝试提取星标数
+            stars = None
+            star_pattern = rf'{re.escape(url)}.*?(\d+[\d,\.]*)\s*[⭐★]'
+            star_match = re.search(star_pattern, content)
+            if star_match:
+                stars = star_match.group(1)
+
+            items.append({
+                'url': url,
+                'title': title,
+                'description': description,
+                'stars': stars,
+            })
+
+        return items
 
     def _extract_list_items_with_config(self, html: str, list_config: Dict, base_url: str) -> List[Dict]:
         """Extract list items with basic info (title, summary, etc.)"""
