@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Tag, Card, Button, Popconfirm, message, Form, Input, Select, DatePicker, Space } from 'antd'
-import { DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
-import { getJobs, batchDeleteJobs } from '../../api'
+import { DeleteOutlined as BatchDeleteOutlined, SearchOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { getJobs, batchDeleteJobs, batchRunJobs } from '../../api'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -62,6 +62,18 @@ export default function Jobs() {
       loadJobs()
     } catch (error) {
       message.error('批量删除失败')
+    }
+  }
+
+  const handleBatchRun = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchRunJobs(selectedRowKeys)
+      message.success(`成功创建 ${selectedRowKeys.length} 个抓取任务`)
+      setSelectedRowKeys([])
+      loadJobs()
+    } catch (error) {
+      message.error('批量执行失败')
     }
   }
 
@@ -148,11 +160,18 @@ export default function Jobs() {
         </Form>
         <div style={{ marginBottom: 16 }}>
           {selectedRowKeys.length > 0 && (
-            <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条任务吗?`} onConfirm={handleBatchDelete}>
-              <Button danger icon={<BatchDeleteOutlined />}>
-                批量删除 ({selectedRowKeys.length})
-              </Button>
-            </Popconfirm>
+            <>
+              <Popconfirm title={`确定执行选中的 ${selectedRowKeys.length} 条任务吗?`} onConfirm={handleBatchRun}>
+                <Button type="primary" icon={<PlayCircleOutlined />} style={{ marginRight: 8 }}>
+                  批量执行 ({selectedRowKeys.length})
+                </Button>
+              </Popconfirm>
+              <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条任务吗?`} onConfirm={handleBatchDelete}>
+                <Button danger icon={<BatchDeleteOutlined />}>
+                  批量删除 ({selectedRowKeys.length})
+                </Button>
+              </Popconfirm>
+            </>
           )}
         </div>
         <Table

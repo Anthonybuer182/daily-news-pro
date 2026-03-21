@@ -27,6 +27,7 @@ export const getJobs = (params?: any) => api.get('/jobs', { params })
 export const getJob = (id: number) => api.get(`/jobs/${id}`)
 export const createJob = (data: any) => api.post('/jobs', data)
 export const batchDeleteJobs = (ids: number[]) => api.post('/jobs/batch-delete', { ids })
+export const batchRunJobs = (ids: number[]) => api.post('/jobs/batch-run', ids)
 
 // Articles
 export const getArticles = (params?: any) => api.get('/articles', { params })

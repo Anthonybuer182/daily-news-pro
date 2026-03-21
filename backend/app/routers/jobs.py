@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import datetime
@@ -101,3 +101,72 @@ def batch_delete_jobs(request: BatchDeleteRequest, db: Session = Depends(get_db)
             deleted_count += 1
     db.commit()
     return {"message": f"Deleted {deleted_count} jobs", "deleted_count": deleted_count}
+
+
+@router.post("/batch-run")
+async def batch_run_jobs(ids: List[int] = Body(...), db: Session = Depends(get_db)):
+    """批量执行任务（重新运行选中的任务）"""
+    from app.database import engine as db_engine
+    from sqlalchemy.orm import sessionmaker
+    import logging
+    import threading
+    import asyncio
+
+    logger = logging.getLogger(__name__)
+
+    if not ids:
+        raise HTTPException(status_code=400, detail="No job IDs provided")
+
+    job_ids = []
+
+    for job_id in ids:
+        db_job = db.query(Job).filter(Job.id == job_id).first()
+        if not db_job or not db_job.rule_id:
+            continue
+
+        new_job = Job(
+            rule_id=db_job.rule_id,
+            trigger_type="manual",
+            status="running",
+            started_at=datetime.utcnow()
+        )
+        db.add(new_job)
+        db.commit()
+        db.refresh(new_job)
+
+        new_job_id = new_job.id
+        job_ids.append({"original_job_id": job_id, "new_job_id": new_job_id})
+
+        def run_crawler_background(rule_id=db_job.rule_id, job_id=new_job_id):
+            Session = sessionmaker(bind=db_engine)
+            session = Session()
+            try:
+                from app.services.crawler import CrawlerEngine
+                engine = CrawlerEngine(session, job_id)
+                asyncio.run(engine.crawl_rule(rule_id))
+            except asyncio.TimeoutError:
+                logger.error(f"Crawler job {job_id} timed out")
+                _update_job_status(session, job_id, "failed", "Job timed out")
+            except Exception as e:
+                logger.error(f"Crawler job {job_id} failed: {e}")
+                _update_job_status(session, job_id, "failed", str(e))
+            finally:
+                session.close()
+
+        def _update_job_status(session, job_id, status, error_msg):
+            try:
+                job = session.query(Job).filter(Job.id == job_id).first()
+                if job:
+                    job.status = status
+                    job.error_message = error_msg
+                    job.finished_at = datetime.utcnow()
+                    session.commit()
+                    logger.info(f"Job {job_id} status updated to {status}")
+            except Exception as e:
+                logger.error(f"Failed to update job {job_id} status: {e}")
+                session.rollback()
+
+        thread = threading.Thread(target=run_crawler_background)
+        thread.start()
+
+    return {"message": f"Started {len(job_ids)} crawl tasks", "jobs": job_ids}
