@@ -2,7 +2,6 @@ import { Layout, Menu } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined,
-  SettingOutlined,
   FileTextOutlined,
   PlaySquareOutlined,
   ToolOutlined,
@@ -15,7 +14,6 @@ const menuItems = [
   { key: '/rules', icon: <ToolOutlined />, label: '规则管理' },
   { key: '/jobs', icon: <PlaySquareOutlined />, label: '任务管理' },
   { key: '/articles', icon: <FileTextOutlined />, label: '文章管理' },
-  { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
 ]
 
 export default function Sidebar() {

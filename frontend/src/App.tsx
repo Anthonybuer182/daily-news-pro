@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard'
 import Rules from './pages/Rules'
 import Jobs from './pages/Jobs'
 import Articles from './pages/Articles'
-import Settings from './pages/Settings'
 
 const { Content } = Layout
 
@@ -21,7 +20,6 @@ function App() {
             <Route path="/rules" element={<Rules />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/articles" element={<Articles />} />
-            <Route path="/settings" element={<Settings />} />
           </Routes>
         </Content>
       </Layout>
