@@ -145,9 +145,6 @@ export default function Rules() {
         }}>
           新建规则
         </Button>
-        <Button icon={<PlayCircleOutlined />} onClick={handleSelectAll} style={{ marginLeft: 8 }}>
-          全选
-        </Button>
         {rules.length > 0 && selectedRowKeys.length < rules.length && (
           <Button onClick={handleDeselectAll} style={{ marginLeft: 8 }}>
             取消全选
@@ -175,7 +172,7 @@ export default function Rules() {
         loading={loading}
         rowSelection={{
           selectedRowKeys,
-          onChange: (keys: number[]) => setSelectedRowKeys(keys),
+          onChange: (keys) => setSelectedRowKeys(keys as number[]),
         }}
       />
       <RuleModal
