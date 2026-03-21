@@ -106,10 +106,6 @@ export default function Rules() {
     }
   }
 
-  const handleDeselectAll = () => {
-    setSelectedRowKeys([])
-  }
-
   const handleSearch = (values: any) => {
     setPagination(prev => ({ ...prev, current: 1 }))
     setSearchParams({
@@ -204,11 +200,6 @@ export default function Rules() {
         }}>
           新建规则
         </Button>
-        {selectedRowKeys.length > 0 && (
-          <Button onClick={handleDeselectAll} style={{ marginLeft: 8 }}>
-            取消全选
-          </Button>
-        )}
         {selectedRowKeys.length > 0 && (
           <>
             <Popconfirm title={`确定执行选中的 ${selectedRowKeys.length} 条规则吗?`} onConfirm={handleBatchRun}>
