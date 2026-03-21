@@ -10,21 +10,35 @@ export default function Articles() {
   const [previewVisible, setPreviewVisible] = useState(false)
   const [markdown, setMarkdown] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 })
 
   useEffect(() => {
     loadArticles()
-  }, [])
+  }, [pagination.current, pagination.pageSize])
 
   const loadArticles = async () => {
     setLoading(true)
     try {
-      const res = await getArticles()
+      const res = await getArticles({
+        skip: (pagination.current - 1) * pagination.pageSize,
+        limit: pagination.pageSize
+      })
       setArticles(res.data)
+      const total = res.headers['x-total-count'] || res.data.length
+      setPagination(prev => ({ ...prev, total }))
     } catch (error) {
       console.error(error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleTableChange = (pag: any) => {
+    setPagination(prev => ({
+      ...prev,
+      current: pag.current,
+      pageSize: pag.pageSize
+    }))
   }
 
   const handlePreview = async (id: number) => {
@@ -120,8 +134,17 @@ export default function Articles() {
           loading={loading}
           rowSelection={{
             selectedRowKeys,
-            onChange: (keys: number[]) => setSelectedRowKeys(keys),
+            onChange: (keys) => setSelectedRowKeys(keys as number[]), 
           }}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100', '200'],
+            showTotal: (total: number) => `共 ${total} 条`
+          }}
+          onChange={handleTableChange}
         />
       </Card>
       <Modal

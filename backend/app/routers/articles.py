@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.database import get_db
 from app.models import Article
-from app.schemas import Article as ArticleSchema, ArticleCreate, ArticleUpdate
+from app.schemas import ArticleCreate, ArticleUpdate, Article as ArticleSchema
 from pydantic import BaseModel
 
 
@@ -26,6 +27,8 @@ def get_articles(
         query = query.filter(Article.rule_id == rule_id)
     if status:
         query = query.filter(Article.status == status)
+
+    total = query.count()
     articles = query.order_by(Article.created_at.desc()).offset(skip).limit(limit).all()
 
     # Add rule_source_type and rule_name to each article
@@ -34,7 +37,11 @@ def get_articles(
             article.rule_source_type = article.rule.source_type
             article.rule_name = article.rule.name
 
-    return articles
+    from app.schemas import Article as ArticleSchema
+    articles_data = [ArticleSchema.model_validate(article).model_dump(mode='json') for article in articles]
+    response = JSONResponse(content=articles_data)
+    response.headers["X-Total-Count"] = str(total)
+    return response
 
 
 @router.get("/{article_id}", response_model=ArticleSchema)
