@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Card, Button, Modal, message, Popconfirm } from 'antd'
-import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
+import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space } from 'antd'
+import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import { getArticles, getArticleMarkdown, batchDeleteArticles } from '../../api'
 import dayjs from 'dayjs'
+
+const { RangePicker } = DatePicker
 
 export default function Articles() {
   const [loading, setLoading] = useState(false)
@@ -11,17 +13,26 @@ export default function Articles() {
   const [markdown, setMarkdown] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 })
+  const [searchForm] = Form.useForm()
+  const [searchParams, setSearchParams] = useState<{
+    keyword?: string;
+    start_date?: string;
+    end_date?: string;
+  }>({})
 
   useEffect(() => {
     loadArticles()
-  }, [pagination.current, pagination.pageSize])
+  }, [pagination.current, pagination.pageSize, searchParams])
 
   const loadArticles = async () => {
     setLoading(true)
     try {
       const res = await getArticles({
         skip: (pagination.current - 1) * pagination.pageSize,
-        limit: pagination.pageSize
+        limit: pagination.pageSize,
+        keyword: searchParams.keyword,
+        start_date: searchParams.start_date,
+        end_date: searchParams.end_date
       })
       setArticles(res.data)
       const total = res.headers['x-total-count'] || res.data.length
@@ -61,6 +72,21 @@ export default function Articles() {
     } catch (error) {
       message.error('批量删除失败')
     }
+  }
+
+  const handleSearch = (values: any) => {
+    setPagination(prev => ({ ...prev, current: 1 }))
+    setSearchParams({
+      keyword: values.keyword,
+      start_date: values.dateRange?.[0]?.format('YYYY-MM-DD'),
+      end_date: values.dateRange?.[1]?.format('YYYY-MM-DD')
+    })
+  }
+
+  const handleReset = () => {
+    searchForm.resetFields()
+    setPagination(prev => ({ ...prev, current: 1 }))
+    setSearchParams({})
   }
 
   const getStatusColor = (status: string) => {
@@ -118,6 +144,29 @@ export default function Articles() {
     <div>
       <h1>文章管理</h1>
       <Card>
+        <Form
+          form={searchForm}
+          layout="inline"
+          onFinish={handleSearch}
+          style={{ marginBottom: 16 }}
+        >
+          <Form.Item name="keyword" label="关键词">
+            <Input placeholder="搜索标题/摘要" style={{ width: 200 }} allowClear />
+          </Form.Item>
+          <Form.Item name="dateRange" label="创建时间">
+            <RangePicker format="YYYY-MM-DD" allowClear />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" icon={<SearchOutlined />} htmlType="submit">
+                查询
+              </Button>
+              <Button onClick={handleReset}>
+                重置
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
         <div style={{ marginBottom: 16 }}>
           {selectedRowKeys.length > 0 && (
             <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 篇文章吗?`} onConfirm={handleBatchDelete}>
@@ -134,7 +183,7 @@ export default function Articles() {
           loading={loading}
           rowSelection={{
             selectedRowKeys,
-            onChange: (keys) => setSelectedRowKeys(keys as number[]), 
+            onChange: (keys) => setSelectedRowKeys(keys as number[]),
           }}
           pagination={{
             current: pagination.current,

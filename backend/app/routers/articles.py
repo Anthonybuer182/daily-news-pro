@@ -20,6 +20,9 @@ def get_articles(
     limit: int = 100,
     rule_id: int = None,
     status: str = None,
+    keyword: str = None,
+    start_date: str = None,
+    end_date: str = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Article).options(joinedload(Article.rule))
@@ -27,6 +30,16 @@ def get_articles(
         query = query.filter(Article.rule_id == rule_id)
     if status:
         query = query.filter(Article.status == status)
+    if keyword:
+        keyword_pattern = f"%{keyword}%"
+        query = query.filter(
+            (Article.title.ilike(keyword_pattern)) |
+            (Article.summary.ilike(keyword_pattern))
+        )
+    if start_date:
+        query = query.filter(Article.created_at >= start_date)
+    if end_date:
+        query = query.filter(Article.created_at <= end_date)
 
     total = query.count()
     articles = query.order_by(Article.created_at.desc()).offset(skip).limit(limit).all()
