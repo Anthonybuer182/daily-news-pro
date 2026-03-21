@@ -12,9 +12,31 @@ router = APIRouter(prefix="/api/rules", tags=["rules"])
 
 
 @router.get("", response_model=List[RuleSchema])
-def get_rules(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    rules = db.query(Rule).offset(skip).limit(limit).all()
-    return rules
+def get_rules(
+    skip: int = 0,
+    limit: int = 100,
+    keyword: str = None,
+    status: str = None,
+    db: Session = Depends(get_db)
+):
+    from fastapi.responses import JSONResponse
+    query = db.query(Rule)
+    if keyword:
+        keyword_pattern = f"%{keyword}%"
+        query = query.filter(
+            (Rule.name.ilike(keyword_pattern)) |
+            (Rule.source_url.ilike(keyword_pattern))
+        )
+    if status:
+        query = query.filter(Rule.status == status)
+
+    total = query.count()
+    rules = query.order_by(Rule.created_at.desc()).offset(skip).limit(limit).all()
+
+    rules_data = [RuleSchema.model_validate(rule).model_dump(mode='json') for rule in rules]
+    response = JSONResponse(content=rules_data)
+    response.headers["X-Total-Count"] = str(total)
+    return response
 
 
 @router.get("/{rule_id}", response_model=RuleSchema)

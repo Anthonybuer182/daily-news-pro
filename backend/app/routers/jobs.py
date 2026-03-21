@@ -20,21 +20,41 @@ def get_jobs(
     limit: int = 100,
     rule_id: int = None,
     status: str = None,
+    keyword: str = None,
+    start_date: str = None,
+    end_date: str = None,
     db: Session = Depends(get_db)
 ):
+    from fastapi.responses import JSONResponse
     query = db.query(Job).options(joinedload(Job.rule))
     if rule_id:
         query = query.filter(Job.rule_id == rule_id)
     if status:
         query = query.filter(Job.status == status)
+    if keyword:
+        keyword_pattern = f"%{keyword}%"
+        from app.models import Rule
+        query = query.outerjoin(Rule).filter(
+            (Job.id.ilike(keyword_pattern)) |
+            (Rule.name.ilike(keyword_pattern))
+        )
+    if start_date:
+        query = query.filter(Job.created_at >= start_date)
+    if end_date:
+        query = query.filter(Job.created_at <= end_date)
+
+    total = query.count()
     jobs = query.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
 
-    # Add rule_name to each job
     for job in jobs:
         if job.rule:
             job.rule_name = job.rule.name
 
-    return jobs
+    from app.schemas import Job as JobSchema
+    jobs_data = [JobSchema.model_validate(job).model_dump(mode='json') for job in jobs]
+    response = JSONResponse(content=jobs_data)
+    response.headers["X-Total-Count"] = str(total)
+    return response
 
 
 @router.get("/{job_id}", response_model=JobSchema)

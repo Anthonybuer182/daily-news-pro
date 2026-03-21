@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Tag, message, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined } from '@ant-design/icons'
+import { Table, Button, Space, Tag, message, Popconfirm, Form, Input, Select } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import { getRules, deleteRule, enableRule, disableRule, runRule, batchDeleteRules, batchRunRules } from '../../api'
 import RuleModal from './RuleModal'
+
+const { Option } = Select
 
 export default function Rules() {
   const [loading, setLoading] = useState(false)
@@ -10,21 +12,42 @@ export default function Rules() {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 })
+  const [searchForm] = Form.useForm()
+  const [searchParams, setSearchParams] = useState<{
+    keyword?: string;
+    status?: string;
+  }>({})
 
   useEffect(() => {
     loadRules()
-  }, [])
+  }, [pagination.current, pagination.pageSize, searchParams])
 
   const loadRules = async () => {
     setLoading(true)
     try {
-      const res = await getRules()
+      const res = await getRules({
+        skip: (pagination.current - 1) * pagination.pageSize,
+        limit: pagination.pageSize,
+        keyword: searchParams.keyword,
+        status: searchParams.status
+      })
       setRules(res.data)
+      const total = res.headers['x-total-count'] || res.data.length
+      setPagination(prev => ({ ...prev, total }))
     } catch (error) {
       message.error('加载规则失败')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleTableChange = (pag: any) => {
+    setPagination(prev => ({
+      ...prev,
+      current: pag.current,
+      pageSize: pag.pageSize
+    }))
   }
 
   const handleDelete = async (id: number) => {
@@ -83,18 +106,25 @@ export default function Rules() {
     }
   }
 
-  const handleSelectAll = () => {
-    const allIds = rules.map((rule: any) => rule.id)
-    setSelectedRowKeys(allIds)
-  }
-
   const handleDeselectAll = () => {
     setSelectedRowKeys([])
   }
 
-  // 传输方式标签映射
+  const handleSearch = (values: any) => {
+    setPagination(prev => ({ ...prev, current: 1 }))
+    setSearchParams({
+      keyword: values.keyword,
+      status: values.status
+    })
+  }
+
+  const handleReset = () => {
+    searchForm.resetFields()
+    setPagination(prev => ({ ...prev, current: 1 }))
+    setSearchParams({})
+  }
+
   const getFetchMethodTag = (record: any) => {
-    // 优先使用 fetch_method，否则根据 render 推断
     let method = record.fetch_method
     if (!method) {
       method = record.render === 'browser' ? 'playwright' : 'httpx'
@@ -109,8 +139,10 @@ export default function Rules() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true },
+    { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
+    { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true,
+      render: (v: string) => v ? <a href={v} target="_blank" rel="noopener noreferrer">{v}</a> : '-'
+    },
     { title: '传输方式', key: 'fetch_method',
       render: (_: any, record: any) => getFetchMethodTag(record)
     },
@@ -138,6 +170,33 @@ export default function Rules() {
 
   return (
     <div>
+      <h1>规则管理</h1>
+      <Form
+        form={searchForm}
+        layout="inline"
+        onFinish={handleSearch}
+        style={{ marginBottom: 16 }}
+      >
+        <Form.Item name="keyword" label="关键词">
+          <Input placeholder="搜索名称/来源" style={{ width: 200 }} allowClear />
+        </Form.Item>
+        <Form.Item name="status" label="状态">
+          <Select placeholder="选择状态" style={{ width: 120 }} allowClear>
+            <Option value="enabled">enabled</Option>
+            <Option value="disabled">disabled</Option>
+          </Select>
+        </Form.Item>
+        <Form.Item>
+          <Space>
+            <Button type="primary" icon={<SearchOutlined />} htmlType="submit">
+              查询
+            </Button>
+            <Button onClick={handleReset}>
+              重置
+            </Button>
+          </Space>
+        </Form.Item>
+      </Form>
       <div style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => {
           setEditingRule(null)
@@ -145,7 +204,7 @@ export default function Rules() {
         }}>
           新建规则
         </Button>
-        {rules.length > 0 && selectedRowKeys.length < rules.length && (
+        {selectedRowKeys.length > 0 && (
           <Button onClick={handleDeselectAll} style={{ marginLeft: 8 }}>
             取消全选
           </Button>
@@ -174,6 +233,15 @@ export default function Rules() {
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys(keys as number[]),
         }}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '20', '50', '100', '200'],
+          showTotal: (total: number) => `共 ${total} 条`
+        }}
+        onChange={handleTableChange}
       />
       <RuleModal
         visible={modalVisible}

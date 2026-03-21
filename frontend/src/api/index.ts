@@ -6,7 +6,7 @@ const api = axios.create({
 })
 
 // Rules
-export const getRules = () => api.get('/rules')
+export const getRules = (params?: any) => api.get('/rules', { params })
 export const getRule = (id: number) => api.get(`/rules/${id}`)
 export const createRule = (data: any) => api.post('/rules', data)
 export const updateRule = (id: number, data: any) => api.put(`/rules/${id}`, data)
