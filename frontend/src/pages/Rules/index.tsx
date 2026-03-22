@@ -136,7 +136,7 @@ export default function Rules() {
     { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true,
       render: (v: string) => v ? <a href={v} target="_blank" rel="noopener noreferrer">{v}</a> : '-'
     },
-    { title: '传输方式', key: 'render',
+    { title: '渲染方式', key: 'render',
       render: (_: any, record: any) => getRenderTag(record)
     },
     { title: '状态', dataIndex: 'status', key: 'status',

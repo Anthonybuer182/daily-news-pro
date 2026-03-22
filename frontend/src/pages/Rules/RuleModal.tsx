@@ -15,7 +15,7 @@ interface RuleModalProps {
 // 字段提示配置
 const FIELD_TIPS = {
   name: '规则的显示名称，用于识别不同的抓取任务，例如："科技新闻头条"',
-  render: '渲染方式（传输层）：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面',
+  render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面',
   content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本',
   source_url: '要抓取的网页URL，例如：\n• HTML：https://example.com/news\n• RSS：https://example.com/feed.xml\n• API：https://api.example.com/articles\n• Markdown：https://raw.githubusercontent.com/.../README.md',
   detail_url_pattern: '正则表达式，用于过滤有效的文章链接。\n例如：https://example.com/article/\\d+ 会只匹配形如 /article/123 的URL\n用于排除分页、标签页等非文章链接',
@@ -334,7 +334,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         </Form.Item>
 
         <Form.Item
-          label="传输方式"
+          label="渲染方式"
           tooltip={FIELD_TIPS.render}
         >
           <Segmented

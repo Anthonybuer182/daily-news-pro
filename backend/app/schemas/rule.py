@@ -11,7 +11,7 @@ class RuleBase(BaseModel):
     # 维度1: render (是否需要浏览器渲染)
     # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
     # 可不设置，会根据 content_type 自动推断
-    render: Optional[str] = Field(default=None, description="""渲染方式（传输层）：
+    render: Optional[str] = Field(default=None, description="""渲染方式：
 • http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）
 • browser：浏览器渲染抓取，适用于JS加载的动态页面
 • 不设置：根据 content_type 自动推断""")
