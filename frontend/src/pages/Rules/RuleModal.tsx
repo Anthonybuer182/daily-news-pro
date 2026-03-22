@@ -15,8 +15,8 @@ interface RuleModalProps {
 // 字段提示配置
 const FIELD_TIPS = {
   name: '规则的显示名称，用于识别不同的抓取任务，例如："科技新闻头条"',
-  render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面',
-  content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本',
+  render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面\n\n💡 不设置时自动推断：\n• content_type 为 xml/json/markdown/text → http\n• content_type 为 html 或未设置 → browser',
+  content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本\n\n💡 不设置时默认 html',
   source_url: '要抓取的网页URL，例如：\n• HTML：https://example.com/news\n• RSS：https://example.com/feed.xml\n• API：https://api.example.com/articles\n• Markdown：https://raw.githubusercontent.com/.../README.md',
   detail_url_pattern: '正则表达式，用于过滤有效的文章链接。\n例如：https://example.com/article/\\d+ 会只匹配形如 /article/123 的URL\n用于排除分页、标签页等非文章链接',
   extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• link_attr：链接属性，默认 href\n• max_items：最大抓取数量，默认3条\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存',
