@@ -44,10 +44,10 @@ def get_articles(
     total = query.count()
     articles = query.order_by(Article.created_at.desc()).offset(skip).limit(limit).all()
 
-    # Add rule_source_type and rule_name to each article
+    # Add rule_render and rule_name to each article
     for article in articles:
         if article.rule:
-            article.rule_source_type = article.rule.source_type
+            article.rule_render = article.rule.render
             article.rule_name = article.rule.name
 
     from app.schemas import Article as ArticleSchema

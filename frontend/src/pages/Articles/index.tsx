@@ -98,13 +98,12 @@ export default function Articles() {
     return colors[status] || 'default'
   }
 
-  const getSourceTypeTag = (type: string) => {
+  const getRenderTag = (render: string) => {
     const tagMap: Record<string, { color: string; text: string }> = {
-      rss: { color: 'orange', text: 'RSS' },
-      api: { color: 'blue', text: 'API' },
-      playwright: { color: 'green', text: '网页抓取' },
+      http: { color: 'blue', text: 'HTTP' },
+      browser: { color: 'green', text: '浏览器' },
     }
-    const tag = tagMap[type] || { color: 'default', text: type || '-' }
+    const tag = tagMap[render] || { color: 'default', text: render || '-' }
     return <Tag color={tag.color}>{tag.text}</Tag>
   }
 
@@ -117,8 +116,8 @@ export default function Articles() {
     { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: true,
       render: (v: string) => v || '-'
     },
-    { title: '传输方式', dataIndex: 'rule_source_type', key: 'rule_source_type',
-      render: (v: string) => getSourceTypeTag(v)
+    { title: '传输方式', dataIndex: 'rule_render', key: 'rule_render',
+      render: (v: string) => getRenderTag(v)
     },
     { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,
       render: (v: string) => v || '-'

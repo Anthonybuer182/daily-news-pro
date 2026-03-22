@@ -10,7 +10,7 @@ class RuleBase(BaseModel):
     # ============ 两个维度设计 ============
     # 维度1: render (是否需要浏览器渲染)
     # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
-    # 可不设置，会根据 content_type 或 source_type 自动推断
+    # 可不设置，会根据 content_type 自动推断
     render: Optional[str] = Field(default=None, description="""渲染方式（传输层）：
 • http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）
 • browser：浏览器渲染抓取，适用于JS加载的动态页面
@@ -18,27 +18,16 @@ class RuleBase(BaseModel):
 
     # 维度2: content_type (返回内容格式)
     # 可选值: html, xml, json, markdown, text
-    # 可不设置，会根据 source_type 或 strategy 自动推断
+    # 可不设置，默认 html
     content_type: Optional[str] = Field(default=None, description="""内容格式：
 • html：HTML 网页（默认）
 • xml：XML 格式（RSS/Atom）
 • json：JSON API 接口
 • markdown：Markdown 文件（如 GitHub README）
 • text：纯文本
-• 不设置：根据 source_type 或 strategy 自动推断""")
+• 不设置：默认 html""")
 
     source_url: Optional[str] = Field(default=None, description="要抓取的 URL，例如：'https://example.com/news'")
-
-    # 传输方式: httpx (直接HTTP请求) 或 playwright (浏览器渲染)
-    fetch_method: Optional[str] = Field(default=None, description="""传输方式：
-• httpx：直接HTTP请求，速度快
-• playwright：浏览器渲染抓取，适用于JS加载的动态页面
-• 不设置：根据 render 自动推断""")
-
-    # ============ 旧字段 (保留用于兼容) ============
-    # 旧版字段
-    source_type: Optional[str] = Field(default=None, description="(废弃) 旧版字段，请使用 render + content_type")
-    strategy: Optional[str] = Field(default="auto", description="(废弃) 旧版字段，请使用 content_type")
 
     # 通用配置字段 (JSON 格式) - 统一的 extract_config
     field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于API/RSS等场景，将原始数据字段映射到目标字段")
@@ -106,7 +95,7 @@ class RuleBase(BaseModel):
     }
   }
 }""")
-    request_config: Optional[str] = Field(default=None, description="API请求配置，JSON格式。当source_type为http时使用，可配置请求方法、参数、认证等")
+    request_config: Optional[str] = Field(default=None, description="API请求配置，JSON格式。当render为http时使用，可配置请求方法、参数、认证等")
 
     # 旧的选择器字段 (保留用于兼容)
     list_selector_type: str = Field(default="css", description="列表选择器类型：css(CSS选择器) 或 xpath(XPath表达式)")

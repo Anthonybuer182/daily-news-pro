@@ -35,7 +35,7 @@ class Article(ArticleBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    rule_source_type: Optional[str] = None
+    rule_render: Optional[str] = None
     rule_name: Optional[str] = None
 
     class Config:

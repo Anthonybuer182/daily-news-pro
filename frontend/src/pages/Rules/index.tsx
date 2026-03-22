@@ -120,16 +120,13 @@ export default function Rules() {
     setSearchParams({})
   }
 
-  const getFetchMethodTag = (record: any) => {
-    let method = record.fetch_method
-    if (!method) {
-      method = record.render === 'browser' ? 'playwright' : 'httpx'
-    }
+  const getRenderTag = (record: any) => {
+    const render = record.render || (record.content_type === 'html' ? 'browser' : 'http')
     const tagMap: Record<string, { color: string; text: string }> = {
-      httpx: { color: 'blue', text: 'HTTP' },
-      playwright: { color: 'green', text: '浏览器' },
+      http: { color: 'blue', text: 'HTTP' },
+      browser: { color: 'green', text: '浏览器' },
     }
-    const tag = tagMap[method] || { color: 'default', text: method }
+    const tag = tagMap[render] || { color: 'default', text: render }
     return <Tag color={tag.color}>{tag.text}</Tag>
   }
 
@@ -139,8 +136,8 @@ export default function Rules() {
     { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true,
       render: (v: string) => v ? <a href={v} target="_blank" rel="noopener noreferrer">{v}</a> : '-'
     },
-    { title: '传输方式', key: 'fetch_method',
-      render: (_: any, record: any) => getFetchMethodTag(record)
+    { title: '传输方式', key: 'render',
+      render: (_: any, record: any) => getRenderTag(record)
     },
     { title: '状态', dataIndex: 'status', key: 'status',
       render: (status: string) => (

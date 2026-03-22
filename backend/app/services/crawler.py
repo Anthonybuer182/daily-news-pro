@@ -639,8 +639,8 @@ class CrawlerEngine:
         list_config = config.get("list", {})
         detail_config = config.get("detail", {})
 
-        # 获取策略名称
-        strategy_name = getattr(self.rule, 'strategy', None) or config.get("strategy", "auto")
+        # 获取策略名称（从 extract_config 中获取，不从 rule 字段）
+        strategy_name = config.get("strategy", "auto")
 
         # 获取列表页 URL
         list_url = list_config.get("url") or self.rule.source_url
@@ -1116,10 +1116,11 @@ class CrawlerEngine:
         """Extract links from pages"""
         all_links = []
 
-        # 使用获取方式决定提取策略
-        fetch_method = self.rule.get_fetch_method()
+        # 使用 render 决定提取策略
+        render = self.rule.get_render()
 
-        if fetch_method == "playwright":
+        if render == "browser":
+            # browser 模式 - 使用 Playwright
             async with PlaywrightCrawler(
                 user_agent=self.rule.user_agent,
                 delay_min=self.rule.delay_min,
@@ -1128,11 +1129,8 @@ class CrawlerEngine:
                 html = await self._fetch_with_method(urls[0], crawler)
                 if html:
                     all_links = self._extract_links_from_html(html, urls[0], level)
-        elif fetch_method == "http":
-            # HTTP/API mode - skip link extraction, handled in _crawl_http
-            pass
         else:
-            # feed mode - use httpx
+            # http 模式 - 使用 httpx
             for url in urls:
                 self._log("info", f"Extracting links from: {url}")
                 html = self._fetch_with_httpx(url)

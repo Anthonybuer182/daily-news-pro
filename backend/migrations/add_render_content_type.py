@@ -23,10 +23,7 @@ def migrate(db_path: str):
     columns_to_add = {
         "render": "VARCHAR(20)",
         "content_type": "VARCHAR(20)",
-        "fetch_method": "VARCHAR(20)",
-        "strategy": "VARCHAR(50) DEFAULT 'auto'",
         "source_url": "VARCHAR(500)",
-        "source_type": "VARCHAR(20) DEFAULT 'playwright'",
         "field_mapping": "TEXT",
         "extract_config": "TEXT",
         "request_config": "TEXT",
