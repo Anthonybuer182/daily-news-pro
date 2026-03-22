@@ -74,7 +74,7 @@ class CrawlerEngine:
         # 默认字段映射
         title_field = field_mapping.get("title", "title")
         link_field = field_mapping.get("link", "link")
-        content_field = field_mapping.get("content", "content") or field_mapping.get("description", "description")
+        content_field = field_mapping.get("description") or field_mapping.get("content", "content")
         author_field = field_mapping.get("author", "author")
         date_field = field_mapping.get("date", "date") or field_mapping.get("pubDate", "pubDate")
 
