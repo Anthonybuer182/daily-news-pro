@@ -568,10 +568,9 @@ class CrawlerEngine:
                     nodes = value.get("nodes")
                     if nodes and isinstance(nodes, list):
                         return nodes
-
-            # 4. data 本身是列表
-            if isinstance(data_field, list):
-                return data_field
+        elif isinstance(data_field, list):
+            # 4. data 本身是列表 (Twitter API 等)
+            return data_field
 
         # 5. 尝试 data.nodes (GitHub API 常用)
         nodes = data.get("nodes")
@@ -679,7 +678,7 @@ class CrawlerEngine:
         # 获取字段映射
         title_field = field_mapping.get("title", "title")
         url_field = field_mapping.get("url", "url") or field_mapping.get("link", "link") or field_mapping.get("html_url", "html_url")
-        content_field = field_mapping.get("content", "content") or field_mapping.get("body", "body") or field_mapping.get("description", "description")
+        content_field = field_mapping.get("description") or field_mapping.get("content", "content") or field_mapping.get("body", "body")
         author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
         date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
         image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
