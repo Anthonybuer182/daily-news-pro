@@ -95,7 +95,41 @@ class RuleBase(BaseModel):
     }
   }
 }""")
-    request_config: Optional[str] = Field(default=None, description="API请求配置，JSON格式。当render为http时使用，可配置请求方法、参数、认证等")
+    request_config: Optional[str] = Field(default=None, description="""API请求配置，JSON格式。当render为http时使用，可配置请求方法、参数、认证等。
+
+【完整配置示例 - GraphQL】
+{
+  "method": "POST",
+  "headers": {"X-Custom-Header": "value"},
+  "body": {
+    "type": "graphql",
+    "query": "{ posts(first: 20) { edges { node { id name tagline } } } }",
+    "variables": {"postedAfter": "2026-03-20T00:00:00Z"}
+  },
+  "timeout": 30
+}
+
+【REST API POST 示例】
+{
+  "method": "POST",
+  "params": {"page": 1, "limit": 10},
+  "headers": {"Content-Type": "application/json"},
+  "body": {
+    "type": "json",
+    "data": {"search": "keyword", "filters": {"category": "news"}}
+  },
+  "timeout": 30
+}
+
+【支持的配置项】
+• method: 请求方法 (GET/POST/PUT/DELETE)，默认 GET
+• params: URL 查询参数 (dict)
+• headers: 自定义请求头 (dict)
+• body.type: body 类型 (json/form/graphql/raw)
+• body.data: 请求体数据
+• body.query: GraphQL 查询语句
+• body.variables: GraphQL 变量 (dict)
+• timeout: 请求超时时间 (秒)""")
 
     # 旧的选择器字段 (保留用于兼容)
     list_selector_type: str = Field(default="css", description="列表选择器类型：css(CSS选择器) 或 xpath(XPath表达式)")
@@ -119,8 +153,23 @@ class RuleBase(BaseModel):
     cookie_config: Optional[str] = Field(default=None, description="Cookie配置，JSON格式。用于需要登录认证的网站，例如：{'name': 'session', 'value': 'xxx'}")
     headers_config: Optional[str] = Field(default=None, description="自定义请求头，JSON格式。例如：{'Referer': 'https://example.com', 'Accept-Language': 'en-US'}")
     auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、cookie(Cookie认证)")
-    auth_config: Optional[str] = Field(default=None, description="认证配置，JSON格式。根据auth_type配置用户名密码或Token等")
-    proxy_config: Optional[str] = Field(default=None, description="代理配置，JSON格式。格式：{'server': 'http://proxy:8080', 'username': 'xxx', 'password': 'xxx'}")
+    auth_config: Optional[str] = Field(default=None, description="""认证配置，JSON格式。根据auth_type配置用户名密码或Token等。
+
+【Bearer Token 示例】
+{"type": "bearer", "token": "your-token-here"}
+
+【Basic Auth 示例】
+{"type": "basic", "username": "user", "password": "pass"}
+
+【Cookie 认证示例】
+{"type": "cookie", "name": "session", "value": "xxx"}""")
+    proxy_config: Optional[str] = Field(default=None, description="""代理配置，JSON格式。
+
+【示例 - 无认证代理】
+{"server": "http://proxy:8080"}
+
+【示例 - 带认证代理】
+{"server": "http://proxy:8080", "username": "user", "password": "pass"}""")
 
     # 延迟配置
     delay_min: int = Field(default=1, description="抓取间隔最小秒数。设置随机延迟的下限，防止请求过快被封")

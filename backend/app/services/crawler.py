@@ -11,6 +11,7 @@ from app.services.trafilatura_extractor import TrafilaturaExtractor
 from app.services.selector import SelectorParser
 from app.services.extract_engine import ExtractEngine
 from app.services.extract_strategies import StrategyRegistry
+from app.services.request_config import RequestConfigManager
 
 
 class CrawlerEngine:
@@ -206,6 +207,36 @@ class CrawlerEngine:
         except:
             return {}
 
+    def _get_auth_config(self) -> Optional[Dict]:
+        """获取认证配置"""
+        if not self.rule.auth_config:
+            return None
+
+        try:
+            return json.loads(self.rule.auth_config)
+        except:
+            return None
+
+    def _get_proxy_config(self) -> Optional[Dict]:
+        """获取代理配置"""
+        if not self.rule.proxy_config:
+            return None
+
+        try:
+            return json.loads(self.rule.proxy_config)
+        except:
+            return None
+
+    def _get_cookie_config(self) -> Optional[Dict]:
+        """获取 Cookie 配置"""
+        if not self.rule.cookie_config:
+            return None
+
+        try:
+            return json.loads(self.rule.cookie_config)
+        except:
+            return None
+
     async def _crawl_http(self) -> Dict:
         """HTTP 抓取 - 根据 content_type 解析内容"""
         import httpx
@@ -229,44 +260,77 @@ class CrawlerEngine:
             if self.rule.user_agent:
                 headers["User-Agent"] = self.rule.user_agent
 
+            # 获取 request_config
+            request_config = self._get_request_config()
+
             # 处理动态日期参数
             from datetime import timedelta
+            import re as re_module
+
+            # 计算昨天日期 (ISO 格式)
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            today = datetime.now().strftime("%Y-%m-%d")
+
+            # 处理 URL 中的动态日期
             if "{{days_ago}}" in url:
                 match_days = 7
-                import re
-                m = re.search(r'created:>(\d+)', url)
+                m = re_module.search(r'created:>(\d+)', url)
                 if m:
                     match_days = int(m.group(1))
                 date = (datetime.now() - timedelta(days=match_days)).strftime("%Y-%m-%d")
                 url = url.replace("{{days_ago}}", date)
                 self._log("info", f"Using date: {date} for API query")
 
-            # 尝试用 httpx 获取，失败则用 curl
-            response_text = None
-            try:
-                response = httpx.get(
-                    url,
-                    headers=headers,
-                    timeout=30,
-                    verify=False
-                )
-                response.raise_for_status()
-                response_text = response.text
-            except Exception as e:
-                self._log("warning", f"httpx failed: {e}, trying curl")
-                # 用 curl 作为后备
-                curl_cmd = ['curl', '-s', '--max-time', '30', url]
-                if headers:
-                    for k, v in headers.items():
-                        curl_cmd.extend(['-H', f'{k}: {v}'])
-                result = subprocess.run(curl_cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    response_text = result.stdout
-                else:
-                    raise ValueError(f"curl also failed: {result.stderr}")
+            # 构建请求参数
+            kwargs = RequestConfigManager.build_request_kwargs(
+                request_config, url, headers
+            )
 
-            if response_text is None:
-                raise ValueError("Failed to get response with both httpx and curl")
+            # 处理 request_config body 中的动态日期占位符
+            if "{{yesterday}}" in request_config.get("body", {}).get("query", ""):
+                kwargs["json"]["query"] = request_config["body"]["query"].replace(
+                    "{{yesterday}}", yesterday
+                )
+                self._log("info", f"Using yesterday date: {yesterday} for GraphQL query")
+            elif "{{today}}" in request_config.get("body", {}).get("query", ""):
+                kwargs["json"]["query"] = request_config["body"]["query"].replace(
+                    "{{today}}", today
+                )
+                self._log("info", f"Using today date: {today} for GraphQL query")
+
+            # 应用认证
+            auth_type = self.rule.auth_type
+            if auth_type and auth_type != "none":
+                auth_config = self._get_auth_config()
+                kwargs = RequestConfigManager.apply_auth(kwargs, auth_type, auth_config)
+
+            # 应用 Cookie
+            cookie_config = self._get_cookie_config()
+            if cookie_config:
+                kwargs = RequestConfigManager.apply_cookies(kwargs, cookie_config)
+
+            # 获取代理配置
+            proxy_config = self._get_proxy_config()
+            proxy = RequestConfigManager.apply_proxy(proxy_config)
+
+            # 检查未使用的旧配置字段
+            unused_fields = []
+            if self.rule.auth_config and not request_config:
+                unused_fields.extend(["auth_config"])
+            if self.rule.cookie_config and not request_config:
+                unused_fields.extend(["cookie_config"])
+            if self.rule.proxy_config and not request_config:
+                unused_fields.extend(["proxy_config"])
+
+            if unused_fields:
+                warning = RequestConfigManager.get_unused_config_warning(
+                    self.rule.name, unused_fields
+                )
+                if warning:
+                    self._log("warning", warning)
+
+            # 执行 HTTP 请求
+            response_text = await self._execute_http_request(kwargs, proxy)
 
             # 根据 content_type 解析
             if content_type == "json":
@@ -281,6 +345,100 @@ class CrawlerEngine:
 
         except Exception as e:
             raise ValueError(f"HTTP crawl failed: {e}")
+
+    async def _execute_http_request(
+        self,
+        kwargs: dict,
+        proxy: Optional[dict] = None
+    ) -> str:
+        """
+        执行 HTTP 请求，支持多种 HTTP 方法
+
+        Args:
+            kwargs: 请求参数，包含 method, url, headers, params, json/data/content 等
+            proxy: 代理配置
+
+        Returns:
+            str: 响应文本
+        """
+        import httpx
+        import subprocess
+
+        method = kwargs.get("method", "GET").upper()
+        url = kwargs.get("url")
+        headers = kwargs.get("headers", {})
+        timeout = kwargs.get("timeout", 30)
+
+        # 尝试用 httpx 获取，失败则用 curl
+        try:
+            async with httpx.AsyncClient(timeout=timeout, verify=False, proxy=proxy.get("server") if proxy else None) as client:
+                request_kwargs = {
+                    "url": url,
+                    "headers": headers,
+                }
+
+                # 添加方法特定的参数
+                if method == "GET":
+                    if "params" in kwargs:
+                        request_kwargs["params"] = kwargs["params"]
+                    response = await client.get(**request_kwargs)
+                elif method == "POST":
+                    if "json" in kwargs:
+                        request_kwargs["json"] = kwargs["json"]
+                    if "data" in kwargs:
+                        request_kwargs["data"] = kwargs["data"]
+                    if "content" in kwargs:
+                        request_kwargs["content"] = kwargs["content"]
+                    if "params" in kwargs:
+                        request_kwargs["params"] = kwargs["params"]
+                    response = await client.post(**request_kwargs)
+                elif method == "PUT":
+                    if "json" in kwargs:
+                        request_kwargs["json"] = kwargs["json"]
+                    if "data" in kwargs:
+                        request_kwargs["data"] = kwargs["data"]
+                    if "content" in kwargs:
+                        request_kwargs["content"] = kwargs["content"]
+                    response = await client.put(**request_kwargs)
+                elif method == "DELETE":
+                    response = await client.delete(**request_kwargs)
+                else:
+                    response = await client.request(method, **request_kwargs)
+
+                response.raise_for_status()
+                return response.text
+
+        except Exception as e:
+            self._log("warning", f"httpx failed: {e}, trying curl")
+            # 用 curl 作为后备
+            curl_cmd = ['curl', '-s', '--max-time', str(timeout), '-X', method, url]
+
+            for k, v in headers.items():
+                curl_cmd.extend(['-H', f'{k}: {v}'])
+
+            # 添加 body 参数
+            if method in ("POST", "PUT"):
+                if "json" in kwargs:
+                    curl_cmd.extend(['-H', 'Content-Type: application/json'])
+                    import json as json_module
+                    curl_cmd.extend(['--data-raw', json_module.dumps(kwargs["json"])])
+                elif "data" in kwargs:
+                    curl_cmd.extend(['--data-raw', str(kwargs["data"])])
+                elif "content" in kwargs:
+                    # raw content - 转换为字符串传递
+                    content = kwargs["content"]
+                    if isinstance(content, bytes):
+                        content = content.decode("utf-8", errors="replace")
+                    curl_cmd.extend(['--data-raw', content])
+
+            if proxy and proxy.get("server"):
+                curl_cmd.extend(['-x', proxy["server"]])
+
+            result = subprocess.run(curl_cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout
+            else:
+                raise ValueError(f"curl also failed: {result.stderr}")
 
     async def _parse_json_response(self, response) -> Dict:
         """解析 JSON 响应"""
@@ -373,6 +531,56 @@ class CrawlerEngine:
         # 抓取详情
         return await self._extract_pending_articles_http({})
 
+    def _extract_items_from_response(self, data: dict) -> list:
+        """
+        从 API 响应中提取列表项
+
+        支持的格式:
+        - {"items": [...]}  # 直接 items 数组
+        - {"data": {"items": [...]}}  # 嵌套 items
+        - {"data": {"posts": {"edges": [...]}}}  # GraphQL edges 结构 (ProductHunt)
+        - {"data": [...]}  # 直接 data 数组
+        """
+        if not isinstance(data, dict):
+            return [data]
+
+        # 1. 尝试直接获取 items
+        items = data.get("items")
+        if items and isinstance(items, list):
+            return items
+
+        # 2. 尝试获取 data.items 或 data.data.items
+        data_field = data.get("data", {})
+        if isinstance(data_field, dict):
+            items = data_field.get("items")
+            if items and isinstance(items, list):
+                return items
+
+            # 3. 处理 GraphQL edges.node 结构
+            # 遍历 data 的所有键，查找是否有 edges
+            for key, value in data_field.items():
+                if isinstance(value, dict):
+                    edges = value.get("edges")
+                    if edges and isinstance(edges, list):
+                        return [edge.get("node", edge) for edge in edges]
+
+                    # 也处理 data.nodes 结构
+                    nodes = value.get("nodes")
+                    if nodes and isinstance(nodes, list):
+                        return nodes
+
+            # 4. data 本身是列表
+            if isinstance(data_field, list):
+                return data_field
+
+        # 5. 尝试 data.nodes (GitHub API 常用)
+        nodes = data.get("nodes")
+        if nodes and isinstance(nodes, list):
+            return nodes
+
+        # 6. 回退: 返回整个 data 作为单个元素
+        return [data]
+
     async def _parse_json_response_text(self, text: str) -> Dict:
         """解析 JSON 响应（文本版本）"""
         import json
@@ -380,12 +588,8 @@ class CrawlerEngine:
         field_mapping = self._get_field_mapping()
 
         # 处理返回数据
-        items = data
-        if isinstance(data, dict):
-            items = data.get("items", data.get("data", [data]))
-
-        if not isinstance(items, list):
-            items = [items]
+        items = self._extract_items_from_response(data)
+        self._log("info", f"Extracted {len(items)} items, first item keys: {list(items[0].keys()) if items else 'none'}")
 
         success_count = 0
         failed_count = 0

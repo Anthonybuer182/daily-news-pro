@@ -190,19 +190,33 @@ class PlaywrightCrawler:
         if self.playwright:
             await self.playwright.stop()
 
-    async def fetch(self, url: str) -> Optional[str]:
-        """Fetch page HTML - tries Playwright first, falls back to HTTP"""
-        # 尝试使用 Playwright
-        if self.browser:
+    async def fetch(
+        self,
+        url: str,
+        method: str = "GET",
+        body: Optional[Dict] = None,
+        headers: Optional[Dict] = None
+    ) -> Optional[str]:
+        """
+        Fetch page HTML - tries Playwright first, falls back to HTTP
+
+        Args:
+            url: URL to fetch
+            method: HTTP method (GET or POST)
+            body: Request body for POST requests
+            headers: Additional headers for the request
+        """
+        # 尝试使用 Playwright (主要针对 GET 请求和简单 POST)
+        if self.browser and method == "GET":
             try:
                 return await self._fetch_with_playwright(url)
             except Exception as e:
                 print(f"Playwright fetch failed for {url}: {e}")
 
-        # Fallback to HTTP if Playwright fails
+        # HTTP 模式支持 POST
         if HTTPX_AVAILABLE:
-            print(f"Falling back to HTTP for {url}")
-            return await self._fetch_with_http(url)
+            print(f"Using HTTP {method} for {url}")
+            return await self._fetch_with_http(url, method=method, body=body, headers=headers)
 
         return None
 
@@ -242,21 +256,34 @@ class PlaywrightCrawler:
         finally:
             await created_context.close()
 
-    async def _fetch_with_http(self, url: str) -> Optional[str]:
-        """Fallback fetch using httpx"""
+    async def _fetch_with_http(
+        self,
+        url: str,
+        method: str = "GET",
+        body: Optional[Dict] = None,
+        headers: Optional[Dict] = None
+    ) -> Optional[str]:
+        """Fallback fetch using httpx, supports POST with body"""
         if not HTTPX_AVAILABLE:
             return None
 
-        headers = {
+        default_headers = {
             'User-Agent': self.user_agent or 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Connection': 'keep-alive',
         }
 
+        if headers:
+            default_headers.update(headers)
+
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
+                if method.upper() == "POST" and body:
+                    response = await client.post(url, json=body, headers=default_headers)
+                else:
+                    response = await client.get(url, headers=default_headers)
+
                 if response.status_code == 200:
                     return response.text
                 else:
