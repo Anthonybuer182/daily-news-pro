@@ -15,7 +15,7 @@ function App() {
   return (
     <Routes>
       {/* 管理后台 */}
-      <Route path="/" element={
+      <Route path="/*" element={
         <Layout style={{ minHeight: '100vh' }}>
           <Sidebar />
           <Layout>
