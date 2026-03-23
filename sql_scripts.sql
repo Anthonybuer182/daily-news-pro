@@ -81,11 +81,12 @@ CREATE TABLE articles (
 	publish_time DATETIME, 
 	cover_image VARCHAR(500), 
 	markdown_file VARCHAR(500), 
-	status VARCHAR(20), 
-	error_message TEXT, 
-	created_at DATETIME, 
-	updated_at DATETIME, 
-	PRIMARY KEY (id), 
+	status VARCHAR(20),
+	error_message TEXT,
+	tags TEXT,
+	created_at DATETIME,
+	updated_at DATETIME,
+	PRIMARY KEY (id),
 	FOREIGN KEY(rule_id) REFERENCES rules (id) ON DELETE CASCADE
 );
 INSERT INTO articles VALUES(1,10,'https://www.producthunt.com/r/DW6P33NOZTQ6LJ?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+%E6%97%A9%E6%8A%A5+%28ID%3A+278879%29','Design Agent by Lokuma',NULL,NULL,NULL,NULL,'data/articles/f9adb12816.md','success',NULL,'2026-03-22 02:27:03.313660','2026-03-22 02:27:03.313662');

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -37,6 +37,7 @@ class Article(ArticleBase):
     updated_at: datetime
     rule_render: Optional[str] = None
     rule_name: Optional[str] = None
+    tags: Optional[List[str]] = []  # 新增
 
     class Config:
         from_attributes = True

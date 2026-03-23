@@ -18,6 +18,7 @@ class Article(Base):
     markdown_file = Column(String(500))
     status = Column(String(20), default="pending")
     error_message = Column(Text)
+    tags = Column(Text)  # JSON 格式存储标签数组，如 '["AI", "创业"]'
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
