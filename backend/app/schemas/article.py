@@ -29,6 +29,7 @@ class ArticleUpdate(BaseModel):
     markdown_file: Optional[str] = None
     status: Optional[str] = None
     error_message: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class Article(ArticleBase):
