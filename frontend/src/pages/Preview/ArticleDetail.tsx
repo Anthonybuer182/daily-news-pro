@@ -4,6 +4,7 @@ import { Layout, Button, Tooltip, Spin, message } from 'antd';
 import { ArrowLeftOutlined, BgColorsOutlined, LinkOutlined } from '@ant-design/icons';
 import { getArticle, getArticleMarkdown } from '../../api';
 import ArticleContent from './components/ArticleContent';
+import { useTheme } from './context/ThemeContext';
 
 const { Header, Content } = Layout;
 
@@ -13,7 +14,7 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState<any>(null);
   const [markdown, setMarkdown] = useState('');
   const [loading, setLoading] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+  const { darkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
     if (!id) return;
@@ -37,11 +38,6 @@ export default function ArticleDetail() {
 
     loadArticle();
   }, [id, navigate]);
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    document.body.classList.toggle('dark-mode', !darkMode);
-  };
 
   if (loading) {
     return (
