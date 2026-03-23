@@ -100,7 +100,11 @@ git commit -m "feat: add tags field to Article model"
 **Files:**
 - Modify: `backend/app/routers/articles.py`
 
-- [ ] **Step 1: 添加获取所有标签接口**
+- [ ] **Step 1: 添加 import json 到文件顶部**
+
+在 `backend/app/routers/articles.py` 顶部添加 `import json`（用于 tags 解析）。
+
+- [ ] **Step 2: 添加获取所有标签接口**
 
 在 `backend/app/routers/articles.py` 添加：
 
@@ -112,17 +116,16 @@ def get_tags(db: Session = Depends(get_db)):
     all_tags = set()
     for article in articles:
         if article.tags:
-            import json
             try:
                 tags_list = json.loads(article.tags)
                 if isinstance(tags_list, list):
                     all_tags.update(tags_list)
-            except:
+            except Exception:
                 pass
     return list(all_tags)
 ```
 
-- [ ] **Step 2: 修改 get_articles 接口支持 tags 和 source 筛选**
+- [ ] **Step 3: 修改 get_articles 接口支持 tags 和 source 筛选**
 
 更新 `backend/app/routers/articles.py` 的 `get_articles` 函数：
 
@@ -141,6 +144,7 @@ def get_articles(
     tags: str = None,        # 新增：逗号分隔的标签列表
     db: Session = Depends(get_db)
 ):
+    from datetime import datetime, timedelta, timezone
     query = db.query(Article).options(joinedload(Article.rule))
 
     # 原有筛选
@@ -161,10 +165,9 @@ def get_articles(
 
     # 时间范围筛选
     if time_range:
-        from datetime import datetime, timedelta
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if time_range == 'today':
-            query = query.filter(Article.created_at >= now.replace(hour=0, minute=0, second=0))
+            query = query.filter(Article.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
         elif time_range == 'week':
             query = query.filter(Article.created_at >= now - timedelta(days=7))
         elif time_range == 'month':
@@ -195,19 +198,21 @@ def get_articles(
     return response
 ```
 
-- [ ] **Step 3: 添加 Rule import**
+- [ ] **Step 4: 添加 Rule import**
 
-在文件顶部添加：
+将 `backend/app/routers/articles.py` 顶部的 `from app.models import Article` 修改为：
 ```python
 from app.models import Article, Rule
 ```
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add backend/app/routers/articles.py
-git commit -m "feat: add tags endpoint and advanced filters to articles API"
-```
+git commit -m "feat: add tags endpoint and advanced filters to articles API (fixes #2)
+- Fix datetime.utcnow() deprecation warning
+- Fix import statement
+- Add proper exception handling"
 
 ---
 
@@ -672,22 +677,31 @@ interface NewsCardProps {
 }
 
 export default function NewsCard({ article }: NewsCardProps) {
+  const isDarkMode = document.body.classList.contains('dark-mode');
+
   return (
     <Link to={`/preview/article/${article.id}`}>
       <Card
         hoverable
         cover={article.cover_image && <img alt={article.title} src={article.cover_image} style={{ height: 160, objectFit: 'cover' }} />}
-        style={{ height: '100%' }}
+        style={{
+          height: '100%',
+          background: isDarkMode ? '#1f1f1f' : '#fff',
+          borderColor: isDarkMode ? '#303030' : '#e8e8e8'
+        }}
+        styles={{
+          body: { color: isDarkMode ? '#e8e8e8' : 'rgba(0,0,0,0.88)' }
+        }}
       >
         <Card.Meta
           title={article.title}
           description={
             <>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 12, color: isDarkMode ? '#888' : '#999' }}>
                 {article.rule_name} · {dayjs(article.created_at).fromNow()}
               </Text>
               {article.summary && (
-                <p style={{ marginTop: 8, color: '#666', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                <p style={{ marginTop: 8, color: isDarkMode ? '#bbb' : '#666', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {article.summary}
                 </p>
               )}
@@ -723,6 +737,7 @@ interface NewsListProps {
 export default function NewsList({ onTotalChange }: NewsListProps) {
   const { articles, loading, loadingMore, hasMore, loadMore, total } = useArticles();
   const observerRef = useRef<HTMLDivElement>(null);
+  const isDarkMode = document.body.classList.contains('dark-mode');
 
   useEffect(() => {
     onTotalChange(total);
@@ -765,7 +780,7 @@ export default function NewsList({ onTotalChange }: NewsListProps) {
       <div ref={observerRef} style={{ textAlign: 'center', padding: 20 }}>
         {loadingMore && <Spin />}
         {!hasMore && articles.length > 0 && (
-          <span style={{ color: '#999' }}>没有更多了</span>
+          <span style={{ color: isDarkMode ? '#666' : '#999' }}>没有更多了</span>
         )}
       </div>
     </div>
@@ -1101,7 +1116,7 @@ export default function ArticleDetail() {
 - [ ] **Step 3: 安装 react-markdown**
 
 ```bash
-cd frontend && npm install react-markdown
+cd frontend && npm install react-markdown && npm install -D @types/react-markdown
 ```
 
 - [ ] **Step 4: 提交**
@@ -1109,6 +1124,7 @@ cd frontend && npm install react-markdown
 ```bash
 git add frontend/src/pages/Preview/ArticleDetail.tsx
 git add frontend/src/pages/Preview/components/ArticleContent.tsx
+git add frontend/package.json frontend/package-lock.json
 git commit -m "feat: add article detail page with markdown rendering"
 ```
 
