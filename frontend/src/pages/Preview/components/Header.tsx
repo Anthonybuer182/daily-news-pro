@@ -1,7 +1,7 @@
 import { Layout, Input, Button, Tooltip } from 'antd';
 import { BgColorsOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import useTheme from '../context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 
 const { Header: AntHeader } = Layout;
 
@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 export default function Header({ keyword, onKeywordChange, onSearch }: HeaderProps) {
-  const { darkMode, toggleDarkMode } = useTheme();
+  const { toggleDarkMode } = useTheme();
 
   return (
     <AntHeader style={{

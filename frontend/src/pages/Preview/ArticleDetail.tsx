@@ -14,7 +14,7 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState<any>(null);
   const [markdown, setMarkdown] = useState('');
   const [loading, setLoading] = useState(true);
-  const { darkMode, toggleDarkMode } = useTheme();
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
     if (!id) return;
@@ -64,12 +64,12 @@ export default function ArticleDetail() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', background: darkMode ? '#141414' : '#fff' }}>
+    <Layout style={{ minHeight: '100vh', background: isDarkMode ? '#141414' : '#fff' }}>
       <Header style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: darkMode ? '#1f1f1f' : '#001529',
+        background: isDarkMode ? '#1f1f1f' : '#001529',
         padding: '0 24px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
