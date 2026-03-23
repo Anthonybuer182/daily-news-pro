@@ -82,7 +82,7 @@ export function useArticles(): UseArticlesResult {
     setSkip(0);
     setHasMore(true);
     loadArticles(0);
-  }, [filter]);
+  }, [filter, loadArticles]);
 
   const loadMore = useCallback(() => {
     if (!loadingMore && hasMore) {
