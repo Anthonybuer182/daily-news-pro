@@ -7,6 +7,7 @@ import Jobs from './pages/Jobs'
 import Articles from './pages/Articles'
 import Preview from './pages/Preview'
 import ArticleDetail from './pages/Preview/ArticleDetail'
+import PreviewLayout from './pages/Preview/PreviewLayout'
 
 const { Content } = Layout
 
@@ -32,8 +33,16 @@ function App() {
       } />
 
       {/* 预览服务 */}
-      <Route path="/preview" element={<Preview />} />
-      <Route path="/preview/article/:id" element={<ArticleDetail />} />
+      <Route path="/preview" element={
+        <PreviewLayout>
+          <Preview />
+        </PreviewLayout>
+      } />
+      <Route path="/preview/article/:id" element={
+        <PreviewLayout>
+          <ArticleDetail />
+        </PreviewLayout>
+      } />
     </Routes>
   )
 }

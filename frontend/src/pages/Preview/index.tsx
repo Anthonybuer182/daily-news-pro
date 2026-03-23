@@ -5,8 +5,7 @@ import SourceTabs from './components/SourceTabs';
 import TimeFilter from './components/TimeFilter';
 import TagFilter from './components/TagFilter';
 import NewsList from './components/NewsList';
-import { FilterProvider, useFilter } from './context/FilterContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { useFilter } from './context/FilterContext';
 import { getRules, getTags } from '../../api';
 
 const { Content } = Layout;
@@ -70,12 +69,4 @@ function PreviewContent() {
   );
 }
 
-export default function Preview() {
-  return (
-    <ThemeProvider>
-      <FilterProvider>
-        <PreviewContent />
-      </FilterProvider>
-    </ThemeProvider>
-  );
-}
+export default PreviewContent;
