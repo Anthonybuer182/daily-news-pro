@@ -1,9 +1,10 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.database import get_db
-from app.models import Article
+from app.models import Article, Rule
 from app.schemas import ArticleCreate, ArticleUpdate, Article as ArticleSchema
 from pydantic import BaseModel
 
@@ -14,18 +15,40 @@ class BatchDeleteRequest(BaseModel):
 router = APIRouter(prefix="/api/articles", tags=["articles"])
 
 
+@router.get("/tags")
+def get_tags(db: Session = Depends(get_db)):
+    """获取所有已使用的标签列表"""
+    articles = db.query(Article.tags).filter(Article.tags.isnot(None)).all()
+    all_tags = set()
+    for article in articles:
+        if article.tags:
+            try:
+                tags_list = json.loads(article.tags)
+                if isinstance(tags_list, list):
+                    all_tags.update(tags_list)
+            except Exception:
+                pass
+    return list(all_tags)
+
+
 @router.get("", response_model=List[ArticleSchema])
 def get_articles(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 20,
     rule_id: int = None,
     status: str = None,
     keyword: str = None,
     start_date: str = None,
     end_date: str = None,
+    source: str = None,      # 新增：来源名称筛选
+    time_range: str = None,  # 新增：today, week, month
+    tags: str = None,        # 新增：逗号分隔的标签列表
     db: Session = Depends(get_db)
 ):
+    from datetime import datetime, timedelta, timezone
     query = db.query(Article).options(joinedload(Article.rule))
+
+    # 原有筛选
     if rule_id:
         query = query.filter(Article.rule_id == rule_id)
     if status:
@@ -36,6 +59,26 @@ def get_articles(
             (Article.title.ilike(keyword_pattern)) |
             (Article.summary.ilike(keyword_pattern))
         )
+
+    # 来源筛选（通过 rule.name）
+    if source:
+        query = query.join(Article.rule).filter(Rule.name == source)
+
+    # 时间范围筛选
+    if time_range:
+        now = datetime.now(timezone.utc)
+        if time_range == 'today':
+            query = query.filter(Article.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+        elif time_range == 'week':
+            query = query.filter(Article.created_at >= now - timedelta(days=7))
+        elif time_range == 'month':
+            query = query.filter(Article.created_at >= now - timedelta(days=30))
+
+    # 标签筛选
+    if tags:
+        for tag in tags.split(','):
+            query = query.filter(Article.tags.ilike(f'%"{tag.strip()}"%'))
+
     if start_date:
         query = query.filter(Article.created_at >= start_date)
     if end_date:
