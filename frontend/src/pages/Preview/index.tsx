@@ -6,6 +6,7 @@ import TimeFilter from './components/TimeFilter';
 import TagFilter from './components/TagFilter';
 import NewsList from './components/NewsList';
 import { FilterProvider, useFilter } from './context/FilterContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { getRules, getTags } from '../../api';
 
 const { Content } = Layout;
@@ -71,8 +72,10 @@ function PreviewContent() {
 
 export default function Preview() {
   return (
-    <FilterProvider>
-      <PreviewContent />
-    </FilterProvider>
+    <ThemeProvider>
+      <FilterProvider>
+        <PreviewContent />
+      </FilterProvider>
+    </ThemeProvider>
   );
 }
