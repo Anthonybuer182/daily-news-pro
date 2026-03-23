@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Layout, Input, Button, Tooltip } from 'antd';
-import { SearchOutlined, BgColorsOutlined } from '@ant-design/icons';
+import { BgColorsOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 
 const { Header: AntHeader } = Layout;

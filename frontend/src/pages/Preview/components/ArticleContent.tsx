@@ -1,7 +1,7 @@
 import { Typography } from 'antd';
 import ReactMarkdown from 'react-markdown';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface ArticleContentProps {
   title: string;

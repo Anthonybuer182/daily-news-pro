@@ -1,7 +1,7 @@
 // frontend/src/pages/Preview/hooks/useArticles.ts
 import { useState, useEffect, useCallback } from 'react';
-import { getArticles } from '../../api';
-import { useFilter, PreviewFilter } from '../context/FilterContext';
+import { getArticles } from '../../../api';
+import { useFilter } from '../context/FilterContext';
 
 interface Article {
   id: number;

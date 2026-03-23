@@ -20,7 +20,7 @@ function PreviewContent() {
   useEffect(() => {
     // 加载来源列表
     getRules().then(res => {
-      const names = res.data.map((r: any) => r.name).filter(Boolean);
+      const names: string[] = res.data.map((r: any) => r.name).filter(Boolean);
       setSources([...new Set(names)]);
     });
 
