@@ -29,8 +29,22 @@ export const createJob = (data: any) => api.post('/jobs', data)
 export const batchDeleteJobs = (ids: number[]) => api.post('/jobs/batch-delete', { ids })
 export const batchRunJobs = (ids: number[]) => api.post('/jobs/batch-run', ids)
 
-// Articles
-export const getArticles = (params?: any) => api.get('/articles', { params })
+// Articles - 扩展现有接口
+export const getArticles = (params?: {
+  skip?: number;
+  limit?: number;
+  rule_id?: number;
+  status?: string;
+  keyword?: string;
+  start_date?: string;
+  end_date?: string;
+  source?: string;       // 来源名称
+  time_range?: string;   // today, week, month
+  tags?: string;         // 逗号分隔的标签列表
+}) => api.get('/articles', { params });
+
+export const getTags = () => api.get('/articles/tags');
+
 export const getArticle = (id: number) => api.get(`/articles/${id}`)
 export const getArticleMarkdown = (id: number) => api.get(`/articles/${id}/markdown`)
 export const deleteArticle = (id: number) => api.delete(`/articles/${id}`)
