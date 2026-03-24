@@ -77,4 +77,7 @@ export const getLogs = (params?: {
   end_time?: string;
 }) => api.get('/logs', { params });
 
+// Logs batch operations
+export const batchDeleteLogs = (ids: number[]) => api.post('/logs/batch-delete', { ids })
+
 export default api
