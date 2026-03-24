@@ -67,4 +67,14 @@ export const deleteChannelWebhook = (channelId: number, webhookId: number) => ap
 export const testChannel = (channelId: number) => api.post(`/channels/${channelId}/test`)
 export const sendNow = () => api.post('/channels/send-now')
 
+// Logs
+export const getLogs = (params?: {
+  skip?: number;
+  limit?: number;
+  job_id?: number;
+  level?: string;
+  start_time?: string;
+  end_time?: string;
+}) => api.get('/logs', { params });
+
 export default api
