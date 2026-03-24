@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Card, Form, Select, DatePicker, Space, Button, message } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
-import { getLogs, getJobs } from '../../api'
+import { Table, Tag, Card, Form, Select, DatePicker, Space, Button, message, Popconfirm } from 'antd'
+import { SearchOutlined, DeleteOutlined } from '@ant-design/icons'
+import { getLogs, getJobs, batchDeleteLogs } from '../../api'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -10,6 +10,7 @@ export default function Logs() {
   const [loading, setLoading] = useState(false)
   const [logs, setLogs] = useState([])
   const [jobs, setJobs] = useState([])
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 })
   const [searchForm] = Form.useForm()
   const [searchParams, setSearchParams] = useState<{
@@ -80,6 +81,19 @@ export default function Logs() {
     searchForm.resetFields()
     setPagination(prev => ({ ...prev, current: 1 }))
     setSearchParams({})
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) return
+    try {
+      await batchDeleteLogs(selectedRowKeys)
+      message.success(`成功删除 ${selectedRowKeys.length} 条日志`)
+      setSelectedRowKeys([])
+      loadLogs()
+    } catch (error) {
+      console.error(error)
+      message.error('批量删除失败')
+    }
   }
 
   const getLevelColor = (level: string) => {
@@ -161,11 +175,25 @@ export default function Logs() {
           </Form.Item>
         </Form>
 
+        <div style={{ marginBottom: 16 }}>
+          {selectedRowKeys.length > 0 && (
+            <Popconfirm title={`确定删除选中的 ${selectedRowKeys.length} 条日志吗?`} onConfirm={handleBatchDelete}>
+              <Button danger icon={<DeleteOutlined />}>
+                批量删除 ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
+          )}
+        </div>
+
         <Table
           columns={columns}
           dataSource={logs}
           rowKey="id"
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as number[]),
+          }}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,
