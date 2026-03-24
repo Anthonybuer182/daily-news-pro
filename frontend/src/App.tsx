@@ -6,6 +6,7 @@ import Rules from './pages/Rules'
 import Jobs from './pages/Jobs'
 import Articles from './pages/Articles'
 import Channels from './pages/Channels'
+import Logs from './pages/Logs'
 import Preview from './pages/Preview'
 import ArticleDetail from './pages/Preview/ArticleDetail'
 import PreviewLayout from './pages/Preview/PreviewLayout'
@@ -28,6 +29,7 @@ function App() {
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/articles" element={<Articles />} />
                 <Route path="/channels" element={<Channels />} />
+                <Route path="/logs" element={<Logs />} />
               </Routes>
             </Content>
           </Layout>
