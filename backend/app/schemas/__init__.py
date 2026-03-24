@@ -3,6 +3,7 @@ from app.schemas.rule_level import RuleLevel, RuleLevelCreate, RuleLevelUpdate
 from app.schemas.article import Article, ArticleCreate, ArticleUpdate
 from app.schemas.job import Job, JobCreate, JobUpdate
 from app.schemas.channel import Channel, ChannelCreate, ChannelUpdate, ChannelWebhook, ChannelWebhookCreate
+from app.schemas.log import LogResponse
 
 __all__ = [
     "Rule", "RuleCreate", "RuleUpdate",
@@ -10,4 +11,5 @@ __all__ = [
     "Article", "ArticleCreate", "ArticleUpdate",
     "Job", "JobCreate", "JobUpdate",
     "Channel", "ChannelCreate", "ChannelUpdate", "ChannelWebhook", "ChannelWebhookCreate",
+    "LogResponse",
 ]
