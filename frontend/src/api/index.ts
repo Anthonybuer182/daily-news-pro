@@ -56,4 +56,15 @@ export const previewCrawl = (url: string, ruleId?: number) => api.post('/preview
 // Health
 export const healthCheck = () => api.get('/health')
 
+// Channels
+export const getChannels = () => api.get('/channels')
+export const getChannel = (id: number) => api.get(`/channels/${id}`)
+export const createChannel = (data: any) => api.post('/channels', data)
+export const updateChannel = (id: number, data: any) => api.put(`/channels/${id}`, data)
+export const deleteChannel = (id: number) => api.delete(`/channels/${id}`)
+export const addChannelWebhook = (channelId: number, data: any) => api.post(`/channels/${channelId}/webhooks`, data)
+export const deleteChannelWebhook = (channelId: number, webhookId: number) => api.delete(`/channels/${channelId}/webhooks/${webhookId}`)
+export const testChannel = (channelId: number) => api.post(`/channels/${channelId}/test`)
+export const sendNow = () => api.post('/channels/send-now')
+
 export default api

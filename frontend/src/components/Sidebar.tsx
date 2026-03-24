@@ -5,6 +5,7 @@ import {
   FileTextOutlined,
   PlaySquareOutlined,
   ToolOutlined,
+  SendOutlined,
 } from '@ant-design/icons'
 
 const { Sider } = Layout
@@ -14,6 +15,7 @@ const menuItems = [
   { key: '/rules', icon: <ToolOutlined />, label: '规则管理' },
   { key: '/jobs', icon: <PlaySquareOutlined />, label: '任务管理' },
   { key: '/articles', icon: <FileTextOutlined />, label: '文章管理' },
+  { key: '/channels', icon: <SendOutlined />, label: '渠道管理' },
 ]
 
 export default function Sidebar() {
