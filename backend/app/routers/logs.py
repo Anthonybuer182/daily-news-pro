@@ -2,6 +2,7 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 
@@ -51,3 +52,20 @@ def get_logs(
     response = JSONResponse(content=result)
     response.headers["X-Total-Count"] = str(total)
     return response
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: List[int]
+
+
+@router.post("/batch-delete")
+def batch_delete_logs(request: BatchDeleteRequest, db: Session = Depends(get_db)):
+    """批量删除日志"""
+    deleted_count = 0
+    for log_id in request.ids:
+        db_log = db.query(Log).filter(Log.id == log_id).first()
+        if db_log:
+            db.delete(db_log)
+            deleted_count += 1
+    db.commit()
+    return {"message": f"Deleted {deleted_count} logs", "deleted_count": deleted_count}
