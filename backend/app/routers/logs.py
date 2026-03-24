@@ -1,12 +1,14 @@
 # backend/app/routers/logs.py
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from datetime import datetime
-from app.database import get_db
-from app.models import Log, Job
-from app.schemas.log import LogResponse
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session, joinedload
+
+from app.database import get_db
+from app.models import Log
+from app.models import Job as JobModel, Rule
+from app.schemas.log import LogResponse
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -14,13 +16,13 @@ router = APIRouter(prefix="/api/logs", tags=["logs"])
 def get_logs(
     skip: int = 0,
     limit: int = 20,
-    job_id: int = None,
-    level: str = None,
-    start_time: str = None,
-    end_time: str = None,
+    job_id: Optional[int] = None,
+    level: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Log).options(joinedload(Log.job))
+    query = db.query(Log).options(joinedload(Log.job).joinedload(JobModel.rule))
 
     if job_id:
         query = query.filter(Log.job_id == job_id)
