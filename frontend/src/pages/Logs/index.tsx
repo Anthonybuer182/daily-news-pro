@@ -5,7 +5,6 @@ import { getLogs, getJobs } from '../../api'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
-const { Option } = Select
 
 export default function Logs() {
   const [loading, setLoading] = useState(false)
@@ -59,7 +58,7 @@ export default function Logs() {
     }
   }
 
-  const handleTableChange = (pag: any) => {
+  const handleTableChange = (pag: { current: number; pageSize: number }) => {
     setPagination(prev => ({
       ...prev,
       current: pag.current,
@@ -136,15 +135,15 @@ export default function Logs() {
           <Form.Item name="job_id" label="任务">
             <Select placeholder="选择任务" style={{ width: 200 }} allowClear>
               {jobs.map(job => (
-                <Option key={job.id} value={job.id}>{job.rule_name || `规则${job.rule_id}`}</Option>
+                <Select.Option key={job.id} value={job.id}>{job.rule_name || `规则${job.rule_id}`}</Select.Option>
               ))}
             </Select>
           </Form.Item>
           <Form.Item name="level" label="级别">
             <Select placeholder="选择级别" style={{ width: 120 }} allowClear>
-              <Option value="error">ERROR</Option>
-              <Option value="warning">WARNING</Option>
-              <Option value="info">INFO</Option>
+              <Select.Option value="error">ERROR</Select.Option>
+              <Select.Option value="warning">WARNING</Select.Option>
+              <Select.Option value="info">INFO</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="dateRange" label="时间范围">
