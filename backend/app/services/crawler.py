@@ -68,7 +68,7 @@ class CrawlerEngine:
 
     # _crawl_feed 已删除，使用 _parse_xml_response 替代
 
-    def _extract_rss_item(self, item, field_mapping: Dict) -> Optional[Article]:
+    async def _extract_rss_item(self, item, field_mapping: Dict) -> Optional[Article]:
         """从 RSS item 中提取文章"""
         from bs4 import BeautifulSoup
 
@@ -124,6 +124,9 @@ class CrawlerEngine:
 
         self.db.add(article)
         self.db.commit()
+
+        # 翻译处理
+        await self._translate_and_update_article(article, {"text": content or "", "author": author, "date": date_str})
 
         self._log("info", f"Extracted RSS article: {title}")
         return article
@@ -476,7 +479,7 @@ class CrawlerEngine:
 
         for item in items:
             try:
-                article = self._extract_api_item(item, field_mapping)
+                article = await self._extract_api_item(item, field_mapping)
                 if article:
                     success_count += 1
                 else:
@@ -508,7 +511,7 @@ class CrawlerEngine:
 
         for item in items:
             try:
-                article = self._extract_rss_item(item, field_mapping)
+                article = await self._extract_rss_item(item, field_mapping)
                 if article:
                     success_count += 1
                 else:
@@ -613,7 +616,7 @@ class CrawlerEngine:
 
         for item in items:
             try:
-                article = self._extract_api_item(item, field_mapping)
+                article = await self._extract_api_item(item, field_mapping)
                 if article:
                     success_count += 1
                 else:
@@ -652,7 +655,7 @@ class CrawlerEngine:
 
         for item in items:
             try:
-                article = self._extract_rss_item(item, field_mapping)
+                article = await self._extract_rss_item(item, field_mapping)
                 if article:
                     success_count += 1
                 else:
@@ -691,7 +694,7 @@ class CrawlerEngine:
         # 抓取详情
         return await self._extract_pending_articles_http({})
 
-    def _extract_api_item(self, item: Dict, field_mapping: Dict) -> Optional[Article]:
+    async def _extract_api_item(self, item: Dict, field_mapping: Dict) -> Optional[Article]:
         """从 API 响应中提取文章"""
         # 获取字段映射
         title_field = field_mapping.get("title", "title")
@@ -743,6 +746,9 @@ class CrawlerEngine:
 
         self.db.add(article)
         self.db.commit()
+
+        # 翻译处理
+        await self._translate_and_update_article(article, {"text": content or "", "author": author, "date": date_str, "image": image})
 
         self._log("info", f"Extracted API article: {title}")
         return article
@@ -823,6 +829,10 @@ class CrawlerEngine:
                 article.markdown_file = markdown_file
                 article.status = "success"
                 self.db.commit()
+
+                # 翻译处理
+                await self._translate_and_update_article(article, content)
+
                 success_count += 1
 
             except Exception as e:
@@ -1276,6 +1286,70 @@ class CrawlerEngine:
 
         self.db.commit()
         self._log("info", f"Translated article: {article.title} to {target_lang}")
+
+    async def _translate_and_update_article(self, article, content: Dict) -> None:
+        """翻译并更新文章（通用方法）"""
+        if not self._should_translate():
+            return
+
+        try:
+            config = self._get_translation_config()
+            if not config:
+                return
+
+            target_lang = config.get("target_lang", "zh")
+            source_lang = config.get("source_lang")
+            fields = config.get("fields", ["title", "summary"])
+
+            # 准备要翻译的数据
+            article_data = {
+                "title": article.title or "",
+                "summary": article.summary or "",
+            }
+
+            # 获取原文内容用于翻译
+            if content.get("text") or content.get("content"):
+                article_data["content"] = content.get("text") or content.get("content", "")
+
+            # 确定要翻译的字段
+            fields_to_translate = []
+            if "title" in fields:
+                fields_to_translate.append("title")
+            if "summary" in fields or config.get("translate_summary"):
+                fields_to_translate.append("summary")
+            if "content" in fields or config.get("translate_content"):
+                fields_to_translate.append("content")
+
+            # 执行翻译
+            translation_service = get_translation_service()
+            translated = await translation_service.translate_fields(
+                article_data,
+                fields_to_translate,
+                target_lang,
+                source_lang
+            )
+
+            # 更新文章
+            if "title" in translated and translated["title"]:
+                article.title = translated["title"]
+            if "summary" in translated and translated["summary"]:
+                article.summary = translated["summary"]
+            if "content" in translated and translated["content"]:
+                # 更新 markdown 文件中的内容
+                markdown_content = self._generate_markdown({
+                    "title": article.title,
+                    "text": translated["content"],
+                    "author": content.get("author"),
+                    "date": content.get("date"),
+                    "image": content.get("image"),
+                }, article.url)
+                markdown_file = self._save_markdown(markdown_content, article.url)
+                article.markdown_file = markdown_file
+
+            self.db.commit()
+            self._log("info", f"Translated article: {article.title} to {target_lang}")
+        except Exception as e:
+            self._log("warning", f"Translation failed for {article.title}: {e}")
 
     async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
         """使用配置提取文章内容"""
