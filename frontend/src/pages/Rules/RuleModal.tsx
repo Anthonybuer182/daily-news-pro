@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch, Checkbox, message } from 'antd'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox } from 'antd'
 import { createRule, updateRule } from '../../api'
 
 const { TextArea } = Input
@@ -126,10 +126,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const [loading, setLoading] = useState(false)
   const [render, setRender] = useState<string>('browser')
   const [contentType, setContentType] = useState<string>('html')
-  const [enableTranslation, setEnableTranslation] = useState(false)
   const [translationFormData, setTranslationFormData] = useState({
-    enabled: true,
-    target_lang: 'zh',
+    target_lang: '',
     source_lang: '',
     fields: ['summary', 'content'] as string[],
   })
@@ -145,27 +143,21 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           const config = typeof rule.translation_config === 'string'
             ? JSON.parse(rule.translation_config)
             : rule.translation_config
-          setEnableTranslation(config.enabled || false)
           setTranslationFormData({
-            enabled: config.enabled ?? true,
-            target_lang: config.target_lang || 'zh',
+            target_lang: config.target_lang || '',
             source_lang: config.source_lang || '',
-            fields: config.fields || ['title', 'summary'],
+            fields: config.fields || ['summary', 'content'],
           })
         } catch {
-          setEnableTranslation(false)
           setTranslationFormData({
-            enabled: true,
-            target_lang: 'zh',
+            target_lang: '',
             source_lang: '',
             fields: ['summary', 'content'],
           })
         }
       } else {
-        setEnableTranslation(false)
         setTranslationFormData({
-          enabled: true,
-          target_lang: 'zh',
+          target_lang: '',
           source_lang: '',
           fields: ['summary', 'content'],
         })
@@ -174,10 +166,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       form.resetFields()
       setRender('browser')
       setContentType('html')
-      setEnableTranslation(false)
       setTranslationFormData({
-        enabled: true,
-        target_lang: 'zh',
+        target_lang: '',
         source_lang: '',
         fields: ['summary', 'content'],
       })
@@ -194,21 +184,9 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
-      // 验证翻译配置
-      if (enableTranslation) {
-        if (!translationFormData.target_lang) {
-          message.error('请选择目标语言')
-          return
-        }
-        if (!translationFormData.fields || translationFormData.fields.length === 0) {
-          message.error('请选择至少一个翻译字段')
-          return
-        }
-      }
-      // 处理翻译配置 - 将表单数据序列化为 JSON 字符串
-      if (enableTranslation) {
+      // 处理翻译配置 - 选择目标语言即启用翻译
+      if (translationFormData.target_lang) {
         values.translation_config = JSON.stringify({
-          enabled: true,
           target_lang: translationFormData.target_lang,
           source_lang: translationFormData.source_lang,
           fields: translationFormData.fields,
@@ -548,80 +526,42 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        {/* 翻译配置区域 */}
+        {/* 翻译配置 */}
         <Form.Item
-          label="启用翻译"
-          tooltip="对抓取的标题、摘要、内容进行翻译"
+          label="翻译"
+          tooltip="对抓取的摘要、正文等内容进行翻译"
         >
-          <Switch
-            checked={enableTranslation}
-            onChange={(checked) => {
-              setEnableTranslation(checked)
-              if (checked) {
-                setTranslationFormData({
-                  enabled: true,
-                  target_lang: 'zh',
-                  source_lang: '',
-                  fields: ['summary', 'content'],
-                })
-              }
-            }}
-          />
+          <Space direction="vertical" size="small">
+            <Select
+              value={translationFormData.target_lang}
+              onChange={(value) => setTranslationFormData(prev => ({ ...prev, target_lang: value }))}
+              options={TRANSLATION_LANGUAGE_OPTIONS}
+              placeholder="选择目标语言（留空则不翻译）"
+              style={{ width: 200 }}
+              allowClear
+            />
+            {translationFormData.target_lang && (
+              <>
+                <Select
+                  value={translationFormData.source_lang}
+                  onChange={(value) => setTranslationFormData(prev => ({ ...prev, source_lang: value }))}
+                  options={[
+                    { label: '自动检测', value: '' },
+                    ...TRANSLATION_LANGUAGE_OPTIONS
+                  ]}
+                  placeholder="源语言（留空自动检测）"
+                  style={{ width: 200 }}
+                  allowClear
+                />
+                <Checkbox.Group
+                  value={translationFormData.fields}
+                  onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
+                  options={TRANSLATION_FIELD_OPTIONS}
+                />
+              </>
+            )}
+          </Space>
         </Form.Item>
-
-        {enableTranslation && (
-          <>
-            <Form.Item
-              label="翻译配置"
-              tooltip="配置翻译的目标语言、源语言和字段"
-              style={{ marginBottom: 8 }}
-            >
-              <Text type="secondary">设置翻译选项</Text>
-            </Form.Item>
-
-            <Form.Item
-              label="目标语言"
-              tooltip="翻译后的目标语言"
-              rules={[{ required: true, message: '请选择目标语言' }]}
-            >
-              <Select
-                value={translationFormData.target_lang}
-                onChange={(value) => setTranslationFormData(prev => ({ ...prev, target_lang: value }))}
-                options={TRANSLATION_LANGUAGE_OPTIONS}
-                placeholder="选择目标语言"
-                style={{ width: 200 }}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="源语言"
-              tooltip="留空则自动检测源语言"
-            >
-              <Select
-                value={translationFormData.source_lang}
-                onChange={(value) => setTranslationFormData(prev => ({ ...prev, source_lang: value }))}
-                options={[
-                  { label: '自动检测', value: '' },
-                  ...TRANSLATION_LANGUAGE_OPTIONS
-                ]}
-                placeholder="自动检测"
-                allowClear
-                style={{ width: 200 }}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="翻译字段"
-              tooltip="选择要翻译的字段"
-            >
-              <Checkbox.Group
-                value={translationFormData.fields}
-                onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
-                options={TRANSLATION_FIELD_OPTIONS}
-              />
-            </Form.Item>
-          </>
-        )}
       </Form>
     </Modal>
   )
