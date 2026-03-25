@@ -6,6 +6,8 @@ from typing import Optional, Dict, List
 
 logger = logging.getLogger(__name__)
 
+MAX_TEXT_LENGTH = 50000  # Maximum text length for translation
+
 class TranslationService:
     """LLM-based translation service"""
 
@@ -41,6 +43,10 @@ class TranslationService:
         """
         if not text or not text.strip():
             return text
+
+        # Limit text length to prevent abuse
+        if len(text) > MAX_TEXT_LENGTH:
+            raise ValueError(f"Text too long: {len(text)} chars (max: {MAX_TEXT_LENGTH})")
 
         if not self.api_key:
             raise ValueError("LLM_API_KEY not configured")
@@ -96,7 +102,16 @@ Rules:
 
     def _build_user_prompt(self, text: str) -> str:
         """Build user prompt with text to translate"""
-        return f"Translate this text:\n\n{text}"
+        # Use delimiters to prevent prompt injection
+        # User content is confined within delimiters; model should only translate the content between them
+        delimiter = "<<<ARTICLE_TO_TRANSLATE>>>"
+        return f"""Translate the content between the delimiters to the target language.
+
+{delimiter}
+{text}
+{delimiter}
+
+Only output the translated text between the delimiters. Do not include the delimiters in your response."""
 
     async def translate_fields(
         self,
