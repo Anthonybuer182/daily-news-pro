@@ -122,7 +122,12 @@ export default function Articles() {
     { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,
       render: (v: string) => v || '-'
     },
-    { title: '作者', dataIndex: 'author', key: 'author' },
+    { title: '作者', dataIndex: 'author', key: 'author',
+      render: (v: string) => v || '-'
+    },
+    { title: '发布时间', dataIndex: 'publish_time', key: 'publish_time',
+      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'
+    },
     { title: '来源', dataIndex: 'url', key: 'url', ellipsis: true,
       render: (v: string) => <a href={v} target="_blank" rel="noopener noreferrer">{v}</a>
     },
