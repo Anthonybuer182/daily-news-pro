@@ -1,7 +1,10 @@
 import os
+import logging
 import httpx
 import asyncio
 from typing import Optional, Dict, List
+
+logger = logging.getLogger(__name__)
 
 class TranslationService:
     """LLM-based translation service"""
@@ -127,7 +130,7 @@ Rules:
                     )
                 except Exception as e:
                     # Log error but continue with other fields
-                    print(f"Failed to translate field '{field}': {e}")
+                    logger.warning(f"Failed to translate field '{field}': {e}")
                     # Keep original text on failure
 
         return result
