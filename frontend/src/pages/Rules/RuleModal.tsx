@@ -130,6 +130,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     target_lang: 'zh',
     source_lang: '',
     fields: ['summary', 'content'] as string[],
+    concurrency: 3,
   })
 
   useEffect(() => {
@@ -147,12 +148,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             target_lang: config.target_lang || '',
             source_lang: config.source_lang || '',
             fields: config.fields || ['summary', 'content'],
+            concurrency: config.concurrency || 3,
           })
         } catch {
           setTranslationFormData({
             target_lang: 'zh',
             source_lang: '',
             fields: ['summary', 'content'],
+            concurrency: 3,
           })
         }
       } else {
@@ -160,6 +163,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           target_lang: 'zh',
           source_lang: '',
           fields: ['summary', 'content'],
+          concurrency: 3,
         })
       }
     } else if (visible) {
@@ -170,6 +174,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         target_lang: 'zh',
         source_lang: '',
         fields: ['summary', 'content'],
+        concurrency: 3,
       })
       form.setFieldsValue({
         render: 'browser',
@@ -190,6 +195,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           target_lang: translationFormData.target_lang,
           source_lang: translationFormData.source_lang,
           fields: translationFormData.fields,
+          concurrency: translationFormData.concurrency,
         })
       } else {
         values.translation_config = undefined
@@ -558,6 +564,17 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
                   options={TRANSLATION_FIELD_OPTIONS}
                 />
+                <Space>
+                  <span>并发数：</span>
+                  <InputNumber
+                    min={1}
+                    max={10}
+                    value={translationFormData.concurrency}
+                    onChange={(value) => setTranslationFormData(prev => ({ ...prev, concurrency: value || 3 }))}
+                    style={{ width: 80 }}
+                  />
+                  <span style={{ color: '#999' }}>1-10，避免限流</span>
+                </Space>
               </>
             )}
           </Space>

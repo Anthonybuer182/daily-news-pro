@@ -187,17 +187,17 @@ class RuleBase(BaseModel):
 
 【配置示例】
 {
-  "enabled": true,
   "target_lang": "zh",
   "source_lang": "en",
-  "fields": ["title", "summary", "content"]
+  "fields": ["title", "summary", "content"],
+  "concurrency": 3
 }
 
 【字段说明】
-• enabled: 是否启用翻译
 • target_lang: 目标语言 (zh/en/ja/ko/fr/de/es/ru/ar)
 • source_lang: 源语言 (空则自动检测)
 • fields: 要翻译的字段列表 ["title", "summary", "content"]
+• concurrency: 并发翻译数，默认3，避免 API 限流
 """
     )
 

@@ -1151,9 +1151,12 @@ class CrawlerEngine:
         for article in pending_articles:
             try:
                 url = article.url
+                self._log("info", f"Processing article {article.id}: {article.title[:50]}...")
 
                 # 获取详情页内容
                 html = await crawler.fetch(url)
+                self._log("info", f"Fetched HTML for {article.id}, length: {len(html) if html else 0}")
+
                 if not html:
                     # 降级使用 httpx
                     import httpx
@@ -1169,6 +1172,7 @@ class CrawlerEngine:
                         continue
 
                 if not html:
+                    self._log("error", f"Empty HTML for {url}, marking as failed")
                     article.status = "failed"
                     article.error_message = "Empty response"
                     failed_count += 1
@@ -1205,8 +1209,10 @@ class CrawlerEngine:
 
                 # 翻译处理
                 if self._should_translate():
+                    self._log("info", f"Starting translation for: {article.title}")
                     try:
                         await self._translate_article(article, content)
+                        self._log("info", f"Translation completed for: {article.title}")
                     except Exception as e:
                         self._log("warning", f"Translation failed for {article.title}: {e}")
 
@@ -1234,11 +1240,15 @@ class CrawlerEngine:
         """翻译文章内容"""
         config = self._get_translation_config()
         if not config:
+            self._log("warning", f"No translation config for article: {article.title}")
             return
 
         target_lang = config.get("target_lang", "zh")
         source_lang = config.get("source_lang")
         fields = config.get("fields", ["title", "summary"])
+        concurrency = config.get("concurrency", 3)
+
+        self._log("info", f"Translation config: target_lang={target_lang}, fields={fields}, concurrency={concurrency}")
 
         # 准备要翻译的数据
         article_data = {
@@ -1249,6 +1259,8 @@ class CrawlerEngine:
         # 获取原文内容用于翻译
         if content.get("text") or content.get("content"):
             article_data["content"] = content.get("text") or content.get("content", "")
+
+        self._log("info", f"Article data for translation: title_len={len(article_data['title'])}, summary_len={len(article_data['summary'])}, content_len={len(article_data.get('content', ''))}")
 
         # 确定要翻译的字段
         fields_to_translate = []
@@ -1267,13 +1279,20 @@ class CrawlerEngine:
         elif config.get("translate_content"):
             fields_to_translate.append("content")
 
+        self._log("info", f"Fields to translate: {fields_to_translate}")
+
+        if not fields_to_translate:
+            self._log("warning", f"No fields to translate for: {article.title}")
+            return
+
         # 执行翻译
         translation_service = get_translation_service_with_config(self.db)
         translated = await translation_service.translate_fields(
             article_data,
             fields_to_translate,
             target_lang,
-            source_lang
+            source_lang,
+            concurrency
         )
 
         # 更新文章
@@ -1309,6 +1328,7 @@ class CrawlerEngine:
             target_lang = config.get("target_lang", "zh")
             source_lang = config.get("source_lang")
             fields = config.get("fields", ["title", "summary"])
+            concurrency = config.get("concurrency", 3)
 
             # 准备要翻译的数据
             article_data = {
@@ -1343,7 +1363,8 @@ class CrawlerEngine:
                 article_data,
                 fields_to_translate,
                 target_lang,
-                source_lang
+                source_lang,
+                concurrency
             )
 
             # 更新文章
