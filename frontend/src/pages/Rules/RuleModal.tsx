@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch } from 'antd'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch, Checkbox } from 'antd'
 import { createRule, updateRule } from '../../api'
 
 const { TextArea } = Input
@@ -47,6 +47,31 @@ const CONTENT_TYPE_OPTIONS = [
 const RENDER_OPTIONS = [
   { label: 'HTTP 直接请求', value: 'http' },
   { label: '浏览器渲染', value: 'browser' },
+]
+
+// 翻译语言选项
+const TRANSLATION_LANGUAGE_OPTIONS = [
+  { label: '中文', value: 'zh' },
+  { label: '英文', value: 'en' },
+  { label: '日文', value: 'ja' },
+  { label: '韩文', value: 'ko' },
+  { label: '法文', value: 'fr' },
+  { label: '德文', value: 'de' },
+  { label: '西班牙文', value: 'es' },
+  { label: '俄文', value: 'ru' },
+  { label: '阿拉伯文', value: 'ar' },
+  { label: '葡萄牙文', value: 'pt' },
+  { label: '意大利文', value: 'it' },
+  { label: '越南文', value: 'vi' },
+  { label: '泰文', value: 'th' },
+  { label: '印尼文', value: 'id' },
+]
+
+// 翻译字段选项
+const TRANSLATION_FIELD_OPTIONS = [
+  { label: '标题', value: 'title' },
+  { label: '摘要', value: 'summary' },
+  { label: '正文', value: 'content' },
 ]
 
 // 默认的 Playwright 配置模板（两阶段抓取）
@@ -102,6 +127,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const [render, setRender] = useState<string>('browser')
   const [contentType, setContentType] = useState<string>('html')
   const [enableTranslation, setEnableTranslation] = useState(false)
+  const [translationFormData, setTranslationFormData] = useState({
+    enabled: true,
+    target_lang: 'zh',
+    source_lang: '',
+    fields: ['title', 'summary'] as string[],
+    translate_summary: true,
+    translate_content: true,
+  })
 
   useEffect(() => {
     if (visible && rule) {
@@ -115,15 +148,49 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             ? JSON.parse(rule.translation_config)
             : rule.translation_config
           setEnableTranslation(config.enabled || false)
+          setTranslationFormData({
+            enabled: config.enabled ?? true,
+            target_lang: config.target_lang || 'zh',
+            source_lang: config.source_lang || '',
+            fields: config.fields || ['title', 'summary'],
+            translate_summary: config.translate_summary ?? true,
+            translate_content: config.translate_content ?? true,
+          })
         } catch {
           setEnableTranslation(false)
+          setTranslationFormData({
+            enabled: true,
+            target_lang: 'zh',
+            source_lang: '',
+            fields: ['title', 'summary'],
+            translate_summary: true,
+            translate_content: true,
+          })
         }
+      } else {
+        setEnableTranslation(false)
+        setTranslationFormData({
+          enabled: true,
+          target_lang: 'zh',
+          source_lang: '',
+          fields: ['title', 'summary'],
+          translate_summary: true,
+          translate_content: true,
+        })
       }
     } else if (visible) {
       form.resetFields()
       setRender('browser')
       setContentType('html')
       setEnableTranslation(false)
+      setTranslationFormData({
+        enabled: true,
+        target_lang: 'zh',
+        source_lang: '',
+        fields: ['title', 'summary'],
+        translate_summary: true,
+        translate_content: true,
+      })
       form.setFieldsValue({
         render: 'browser',
         content_type: 'html',
@@ -137,6 +204,19 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+      // 处理翻译配置 - 将表单数据序列化为 JSON 字符串
+      if (enableTranslation) {
+        values.translation_config = JSON.stringify({
+          enabled: true,
+          target_lang: translationFormData.target_lang,
+          source_lang: translationFormData.source_lang,
+          fields: translationFormData.fields,
+          translate_summary: translationFormData.translate_summary,
+          translate_content: translationFormData.translate_content,
+        })
+      } else {
+        values.translation_config = undefined
+      }
       setLoading(true)
       if (rule) {
         await updateRule(rule.id, values)
@@ -479,33 +559,91 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             onChange={(checked) => {
               setEnableTranslation(checked)
               if (checked) {
-                form.setFieldValue('translation_config', JSON.stringify({
+                setTranslationFormData({
                   enabled: true,
                   target_lang: 'zh',
                   source_lang: '',
                   fields: ['title', 'summary'],
                   translate_summary: true,
                   translate_content: true,
-                }, null, 2))
-              } else {
-                form.setFieldValue('translation_config', undefined)
+                })
               }
             }}
           />
         </Form.Item>
 
         {enableTranslation && (
-          <Form.Item
-            name="translation_config"
-            label="翻译配置"
-            tooltip="JSON格式的翻译配置"
-          >
-            <TextArea
-              rows={4}
-              placeholder='{"enabled": true, "target_lang": "zh", "fields": ["title", "summary"]}'
-              style={{ fontFamily: 'monospace' }}
-            />
-          </Form.Item>
+          <>
+            <Form.Item
+              label="翻译配置"
+              tooltip="配置翻译的目标语言、源语言和字段"
+              style={{ marginBottom: 8 }}
+            >
+              <Text type="secondary">设置翻译选项</Text>
+            </Form.Item>
+
+            <Form.Item
+              label="目标语言"
+              tooltip="翻译后的目标语言"
+              rules={[{ required: true, message: '请选择目标语言' }]}
+            >
+              <Select
+                value={translationFormData.target_lang}
+                onChange={(value) => setTranslationFormData(prev => ({ ...prev, target_lang: value }))}
+                options={TRANSLATION_LANGUAGE_OPTIONS}
+                placeholder="选择目标语言"
+                style={{ width: 200 }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="源语言"
+              tooltip="留空则自动检测源语言"
+            >
+              <Select
+                value={translationFormData.source_lang}
+                onChange={(value) => setTranslationFormData(prev => ({ ...prev, source_lang: value }))}
+                options={[
+                  { label: '自动检测', value: '' },
+                  ...TRANSLATION_LANGUAGE_OPTIONS
+                ]}
+                placeholder="自动检测"
+                allowClear
+                style={{ width: 200 }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="翻译字段"
+              tooltip="选择要翻译的字段"
+            >
+              <Checkbox.Group
+                value={translationFormData.fields}
+                onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
+                options={TRANSLATION_FIELD_OPTIONS}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="翻译摘要"
+              tooltip="是否翻译文章的摘要字段"
+            >
+              <Switch
+                checked={translationFormData.translate_summary}
+                onChange={(checked) => setTranslationFormData(prev => ({ ...prev, translate_summary: checked }))}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="翻译正文"
+              tooltip="是否翻译文章的正文内容"
+            >
+              <Switch
+                checked={translationFormData.translate_content}
+                onChange={(checked) => setTranslationFormData(prev => ({ ...prev, translate_content: checked }))}
+              />
+            </Form.Item>
+          </>
         )}
       </Form>
     </Modal>
