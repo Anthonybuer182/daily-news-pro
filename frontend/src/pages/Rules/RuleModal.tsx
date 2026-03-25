@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch, Checkbox } from 'antd'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch, Checkbox, message } from 'antd'
 import { createRule, updateRule } from '../../api'
 
 const { TextArea } = Input
@@ -204,6 +204,17 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+      // 验证翻译配置
+      if (enableTranslation) {
+        if (!translationFormData.target_lang) {
+          message.error('请选择目标语言')
+          return
+        }
+        if (!translationFormData.fields || translationFormData.fields.length === 0) {
+          message.error('请选择至少一个翻译字段')
+          return
+        }
+      }
       // 处理翻译配置 - 将表单数据序列化为 JSON 字符串
       if (enableTranslation) {
         values.translation_config = JSON.stringify({
