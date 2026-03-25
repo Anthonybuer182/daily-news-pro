@@ -1253,9 +1253,17 @@ class CrawlerEngine:
         fields_to_translate = []
         if "title" in fields:
             fields_to_translate.append("title")
-        if "summary" in fields or config.get("translate_summary"):
+
+        # summary: 使用 fields 列表或 translate_summary 布尔值
+        if "summary" in fields:
             fields_to_translate.append("summary")
-        if "content" in fields or config.get("translate_content"):
+        elif config.get("translate_summary"):
+            fields_to_translate.append("summary")
+
+        # content: 使用 fields 列表或 translate_content 布尔值
+        if "content" in fields:
+            fields_to_translate.append("content")
+        elif config.get("translate_content"):
             fields_to_translate.append("content")
 
         # 执行翻译
@@ -1315,9 +1323,17 @@ class CrawlerEngine:
             fields_to_translate = []
             if "title" in fields:
                 fields_to_translate.append("title")
-            if "summary" in fields or config.get("translate_summary"):
+
+            # summary: 使用 fields 列表或 translate_summary 布尔值
+            if "summary" in fields:
                 fields_to_translate.append("summary")
-            if "content" in fields or config.get("translate_content"):
+            elif config.get("translate_summary"):
+                fields_to_translate.append("summary")
+
+            # content: 使用 fields 列表或 translate_content 布尔值
+            if "content" in fields:
+                fields_to_translate.append("content")
+            elif config.get("translate_content"):
                 fields_to_translate.append("content")
 
             # 执行翻译
