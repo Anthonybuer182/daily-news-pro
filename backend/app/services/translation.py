@@ -1,21 +1,34 @@
 import os
 import logging
 import httpx
-import asyncio
 from typing import Optional, Dict, List
 
 logger = logging.getLogger(__name__)
 
 MAX_TEXT_LENGTH = 50000  # Maximum text length for translation
 
+
 class TranslationService:
     """LLM-based translation service"""
 
-    def __init__(self):
-        self.api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-        self.api_key = os.getenv("LLM_API_KEY")
-        self.model = os.getenv("LLM_MODEL", "gpt-4o-mini")
-        self.timeout = int(os.getenv("LLM_TIMEOUT", "60"))
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize translation service.
+
+        Args:
+            config: Model config dict with keys: api_base, api_key, model
+                   If None, falls back to environment variables.
+        """
+        if config:
+            self.api_base = config.get("api_base", "https://api.openai.com/v1")
+            self.api_key = config.get("api_key", "")
+            self.model = config.get("model", "gpt-4o-mini")
+            self.timeout = 60
+        else:
+            self.api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
+            self.api_key = os.getenv("LLM_API_KEY", "")
+            self.model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+            self.timeout = int(os.getenv("LLM_TIMEOUT", "60"))
 
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers"""
@@ -49,7 +62,7 @@ class TranslationService:
             raise ValueError(f"Text too long: {len(text)} chars (max: {MAX_TEXT_LENGTH})")
 
         if not self.api_key:
-            raise ValueError("LLM_API_KEY not configured")
+            raise ValueError("API key not configured")
 
         # Build prompt
         system_prompt = self._build_system_prompt(target_lang, source_lang)
@@ -151,12 +164,25 @@ Only output the translated text between the delimiters. Do not include the delim
         return result
 
 
-# Singleton instance
-_translation_service: Optional[TranslationService] = None
+def get_default_model_config(db) -> Optional[Dict]:
+    """Get default model config from database"""
+    from app.models.model_config import ModelConfig
+    config = db.query(ModelConfig).filter(ModelConfig.is_default == True).first()
+    if config:
+        return {
+            "api_base": config.api_base,
+            "api_key": config.api_key,
+            "model": config.model,
+        }
+    return None
 
-def get_translation_service() -> TranslationService:
-    """Get or create translation service singleton"""
-    global _translation_service
-    if _translation_service is None:
-        _translation_service = TranslationService()
-    return _translation_service
+
+def get_translation_service_with_config(db) -> TranslationService:
+    """
+    Get translation service with config from database.
+    Falls back to environment variables if no config in database.
+    """
+    model_config = get_default_model_config(db)
+    if model_config:
+        return TranslationService(config=model_config)
+    return TranslationService()

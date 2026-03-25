@@ -12,7 +12,7 @@ from app.services.selector import SelectorParser
 from app.services.extract_engine import ExtractEngine
 from app.services.extract_strategies import StrategyRegistry
 from app.services.request_config import RequestConfigManager
-from app.services.translation import get_translation_service
+from app.services.translation import get_translation_service_with_config
 
 
 class CrawlerEngine:
@@ -1268,7 +1268,7 @@ class CrawlerEngine:
             fields_to_translate.append("content")
 
         # 执行翻译
-        translation_service = get_translation_service()
+        translation_service = get_translation_service_with_config(self.db)
         translated = await translation_service.translate_fields(
             article_data,
             fields_to_translate,
@@ -1338,7 +1338,7 @@ class CrawlerEngine:
                 fields_to_translate.append("content")
 
             # 执行翻译
-            translation_service = get_translation_service()
+            translation_service = get_translation_service_with_config(self.db)
             translated = await translation_service.translate_fields(
                 article_data,
                 fields_to_translate,
