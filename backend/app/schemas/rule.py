@@ -190,18 +190,14 @@ class RuleBase(BaseModel):
   "enabled": true,
   "target_lang": "zh",
   "source_lang": "en",
-  "fields": ["title", "summary", "content"],
-  "translate_summary": true,
-  "translate_content": true
+  "fields": ["title", "summary", "content"]
 }
 
 【字段说明】
 • enabled: 是否启用翻译
 • target_lang: 目标语言 (zh/en/ja/ko/fr/de/es/ru/ar)
 • source_lang: 源语言 (空则自动检测)
-• fields: 要翻译的字段列表 ["title", "summary"]
-• translate_summary: 是否翻译摘要
-• translate_content: 是否翻译正文 (markdown)
+• fields: 要翻译的字段列表 ["title", "summary", "content"]
 """
     )
 

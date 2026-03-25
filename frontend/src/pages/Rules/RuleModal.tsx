@@ -132,8 +132,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     target_lang: 'zh',
     source_lang: '',
     fields: ['title', 'summary'] as string[],
-    translate_summary: true,
-    translate_content: true,
   })
 
   useEffect(() => {
@@ -153,8 +151,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             target_lang: config.target_lang || 'zh',
             source_lang: config.source_lang || '',
             fields: config.fields || ['title', 'summary'],
-            translate_summary: config.translate_summary ?? true,
-            translate_content: config.translate_content ?? true,
           })
         } catch {
           setEnableTranslation(false)
@@ -163,8 +159,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             target_lang: 'zh',
             source_lang: '',
             fields: ['title', 'summary'],
-            translate_summary: true,
-            translate_content: true,
           })
         }
       } else {
@@ -174,8 +168,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           target_lang: 'zh',
           source_lang: '',
           fields: ['title', 'summary'],
-          translate_summary: true,
-          translate_content: true,
         })
       }
     } else if (visible) {
@@ -222,8 +214,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           target_lang: translationFormData.target_lang,
           source_lang: translationFormData.source_lang,
           fields: translationFormData.fields,
-          translate_summary: translationFormData.translate_summary,
-          translate_content: translationFormData.translate_content,
         })
       } else {
         values.translation_config = undefined
@@ -575,8 +565,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   target_lang: 'zh',
                   source_lang: '',
                   fields: ['title', 'summary'],
-                  translate_summary: true,
-                  translate_content: true,
                 })
               }
             }}
@@ -632,26 +620,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                 value={translationFormData.fields}
                 onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
                 options={TRANSLATION_FIELD_OPTIONS}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="翻译摘要"
-              tooltip="是否翻译文章的摘要字段"
-            >
-              <Switch
-                checked={translationFormData.translate_summary}
-                onChange={(checked) => setTranslationFormData(prev => ({ ...prev, translate_summary: checked }))}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="翻译正文"
-              tooltip="是否翻译文章的正文内容"
-            >
-              <Switch
-                checked={translationFormData.translate_content}
-                onChange={(checked) => setTranslationFormData(prev => ({ ...prev, translate_content: checked }))}
               />
             </Form.Item>
           </>
