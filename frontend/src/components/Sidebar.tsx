@@ -16,6 +16,7 @@ const menuItems = [
   { key: '/jobs', icon: <PlaySquareOutlined />, label: '任务管理' },
   { key: '/articles', icon: <FileTextOutlined />, label: '文章管理' },
   { key: '/channels', icon: <SendOutlined />, label: '渠道管理' },
+  { key: '/model-configs', icon: <ToolOutlined />, label: '模型配置' },
   { key: '/logs', icon: <FileTextOutlined />, label: '日志管理' },
 ]
 

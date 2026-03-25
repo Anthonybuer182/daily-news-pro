@@ -7,6 +7,7 @@ import Jobs from './pages/Jobs'
 import Articles from './pages/Articles'
 import Channels from './pages/Channels'
 import Logs from './pages/Logs'
+import ModelConfigs from './pages/ModelConfigs'
 import Preview from './pages/Preview'
 import ArticleDetail from './pages/Preview/ArticleDetail'
 import PreviewLayout from './pages/Preview/PreviewLayout'
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/articles" element={<Articles />} />
                 <Route path="/channels" element={<Channels />} />
                 <Route path="/logs" element={<Logs />} />
+                <Route path="/model-configs" element={<ModelConfigs />} />
               </Routes>
             </Content>
           </Layout>

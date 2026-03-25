@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routers import rules, articles, jobs, preview, debug, channels, logs
+from app.routers import rules, articles, jobs, preview, debug, channels, logs, model_configs
 from app.services.scheduler import CrawlScheduler
 
 app = FastAPI(title="Daily News Pro", description="新闻抓取工具")
@@ -30,6 +30,7 @@ app.include_router(preview.router)
 app.include_router(debug.router)
 app.include_router(channels.router)
 app.include_router(logs.router)
+app.include_router(model_configs.router)
 
 
 @app.get("/api/health")
