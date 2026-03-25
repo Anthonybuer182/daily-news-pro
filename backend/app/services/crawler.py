@@ -256,7 +256,8 @@ class CrawlerEngine:
         config = self._get_translation_config()
         if not config:
             return False
-        return config.get("enabled", False)
+        # 选择目标语言即启用翻译
+        return bool(config.get("target_lang"))
 
     async def _crawl_http(self) -> Dict:
         """HTTP 抓取 - 根据 content_type 解析内容"""
