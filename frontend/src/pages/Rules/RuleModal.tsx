@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography } from 'antd'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Switch } from 'antd'
 import { createRule, updateRule } from '../../api'
 
 const { TextArea } = Input
@@ -101,16 +101,29 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const [loading, setLoading] = useState(false)
   const [render, setRender] = useState<string>('browser')
   const [contentType, setContentType] = useState<string>('html')
+  const [enableTranslation, setEnableTranslation] = useState(false)
 
   useEffect(() => {
     if (visible && rule) {
       form.setFieldsValue(rule)
       setRender(rule.render || 'browser')
       setContentType(rule.content_type || 'html')
+      // 初始化翻译配置
+      if (rule.translation_config) {
+        try {
+          const config = typeof rule.translation_config === 'string'
+            ? JSON.parse(rule.translation_config)
+            : rule.translation_config
+          setEnableTranslation(config.enabled || false)
+        } catch {
+          setEnableTranslation(false)
+        }
+      }
     } else if (visible) {
       form.resetFields()
       setRender('browser')
       setContentType('html')
+      setEnableTranslation(false)
       form.setFieldsValue({
         render: 'browser',
         content_type: 'html',
@@ -455,6 +468,45 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             style={{ fontFamily: 'monospace' }}
           />
         </Form.Item>
+
+        {/* 翻译配置区域 */}
+        <Form.Item
+          label="启用翻译"
+          tooltip="对抓取的标题、摘要、内容进行翻译"
+        >
+          <Switch
+            checked={enableTranslation}
+            onChange={(checked) => {
+              setEnableTranslation(checked)
+              if (checked) {
+                form.setFieldValue('translation_config', JSON.stringify({
+                  enabled: true,
+                  target_lang: 'zh',
+                  source_lang: '',
+                  fields: ['title', 'summary'],
+                  translate_summary: true,
+                  translate_content: true,
+                }, null, 2))
+              } else {
+                form.setFieldValue('translation_config', undefined)
+              }
+            }}
+          />
+        </Form.Item>
+
+        {enableTranslation && (
+          <Form.Item
+            name="translation_config"
+            label="翻译配置"
+            tooltip="JSON格式的翻译配置"
+          >
+            <TextArea
+              rows={4}
+              placeholder='{"enabled": true, "target_lang": "zh", "fields": ["title", "summary"]}'
+              style={{ fontFamily: 'monospace' }}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   )
