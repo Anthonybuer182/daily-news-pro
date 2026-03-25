@@ -122,6 +122,9 @@ class Rule(Base):
     status = Column(String(20), default="disabled")
     cron_expression = Column(String(100))
 
+    # 翻译配置
+    translation_config = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
