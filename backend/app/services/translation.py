@@ -9,33 +9,42 @@ MAX_TEXT_LENGTH = 50000  # Maximum text length for translation
 
 
 class TranslationService:
-    """LLM-based translation service"""
+    """LLM-based translation service supporting OpenAI and Anthropic APIs"""
 
     def __init__(self, config: Optional[Dict] = None):
         """
         Initialize translation service.
 
         Args:
-            config: Model config dict with keys: api_base, api_key, model
+            config: Model config dict with keys: api_base, api_key, model, api_type
                    If None, falls back to environment variables.
         """
         if config:
+            self.api_type = config.get("api_type", "openai")
             self.api_base = config.get("api_base", "https://api.openai.com/v1")
             self.api_key = config.get("api_key", "")
             self.model = config.get("model", "gpt-4o-mini")
             self.timeout = 60
         else:
+            self.api_type = os.getenv("LLM_API_TYPE", "openai")
             self.api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
             self.api_key = os.getenv("LLM_API_KEY", "")
             self.model = os.getenv("LLM_MODEL", "gpt-4o-mini")
             self.timeout = int(os.getenv("LLM_TIMEOUT", "60"))
 
     def _get_headers(self) -> Dict[str, str]:
-        """Get request headers"""
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        """Get request headers based on API type"""
+        if self.api_type == "anthropic":
+            return {
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01",
+            }
+        else:
+            return {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
 
     async def translate(
         self,
@@ -68,6 +77,13 @@ class TranslationService:
         system_prompt = self._build_system_prompt(target_lang, source_lang)
         user_prompt = self._build_user_prompt(text)
 
+        if self.api_type == "anthropic":
+            return await self._translate_anthropic(system_prompt, user_prompt)
+        else:
+            return await self._translate_openai(system_prompt, user_prompt)
+
+    async def _translate_openai(self, system_prompt: str, user_prompt: str) -> str:
+        """Translate using OpenAI-compatible API"""
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
@@ -85,6 +101,29 @@ class TranslationService:
                 response.raise_for_status()
                 data = response.json()
                 return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            raise ValueError(f"Translation failed: {e}")
+
+    async def _translate_anthropic(self, system_prompt: str, user_prompt: str) -> str:
+        """Translate using Anthropic Claude API"""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.api_base}/messages",
+                    headers=self._get_headers(),
+                    json={
+                        "model": self.model,
+                        "system": system_prompt,
+                        "messages": [
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 4096,
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["content"][0].text.strip()
         except Exception as e:
             raise ValueError(f"Translation failed: {e}")
 
@@ -170,6 +209,7 @@ def get_default_model_config(db) -> Optional[Dict]:
     config = db.query(ModelConfig).filter(ModelConfig.is_default == True).first()
     if config:
         return {
+            "api_type": config.api_type,
             "api_base": config.api_base,
             "api_key": config.api_key,
             "model": config.model,

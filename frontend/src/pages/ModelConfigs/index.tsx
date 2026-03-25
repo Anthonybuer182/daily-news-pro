@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag } from 'antd'
+import { Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Select } from 'antd'
 import { getModelConfigs, createModelConfig, updateModelConfig, deleteModelConfig, setDefaultModelConfig } from '../../api'
 
 interface ModelConfig {
   id: number
   name: string
+  api_type: string
   api_base: string
   api_key: string
   model: string
@@ -12,6 +13,11 @@ interface ModelConfig {
   created_at: string
   updated_at: string
 }
+
+const API_TYPE_OPTIONS = [
+  { label: 'OpenAI 兼容', value: 'openai' },
+  { label: 'Anthropic (Claude)', value: 'anthropic' },
+]
 
 export default function ModelConfigs() {
   const [configs, setConfigs] = useState<ModelConfig[]>([])
@@ -86,6 +92,12 @@ export default function ModelConfigs() {
 
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name' },
+    {
+      title: 'API 类型',
+      dataIndex: 'api_type',
+      key: 'api_type',
+      render: (api_type: string) => api_type === 'anthropic' ? 'Anthropic' : 'OpenAI'
+    },
     { title: 'API 地址', dataIndex: 'api_base', key: 'api_base', ellipsis: true },
     { title: '模型', dataIndex: 'model', key: 'model' },
     {
@@ -127,6 +139,9 @@ export default function ModelConfigs() {
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input placeholder="如：OpenAI" />
+          </Form.Item>
+          <Form.Item name="api_type" label="API 类型">
+            <Select options={API_TYPE_OPTIONS} placeholder="选择 API 类型" />
           </Form.Item>
           <Form.Item name="api_base" label="API 地址" rules={[{ required: true, message: '请输入 API 地址' }]}>
             <Input placeholder="https://api.openai.com/v1" />
