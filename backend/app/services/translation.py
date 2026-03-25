@@ -9,7 +9,7 @@ MAX_TEXT_LENGTH = 50000  # Maximum text length for translation
 
 
 class TranslationService:
-    """LLM-based translation service supporting OpenAI and Anthropic APIs"""
+    """LLM-based translation service supporting OpenAI, Anthropic and Google Gemini APIs"""
 
     def __init__(self, config: Optional[Dict] = None):
         """
@@ -39,6 +39,11 @@ class TranslationService:
                 "x-api-key": self.api_key,
                 "Content-Type": "application/json",
                 "anthropic-version": "2023-06-01",
+            }
+        elif self.api_type == "google":
+            # Google Gemini uses API key in URL, not headers
+            return {
+                "Content-Type": "application/json",
             }
         else:
             return {
@@ -79,6 +84,8 @@ class TranslationService:
 
         if self.api_type == "anthropic":
             return await self._translate_anthropic(system_prompt, user_prompt)
+        elif self.api_type == "google":
+            return await self._translate_google(system_prompt, user_prompt)
         else:
             return await self._translate_openai(system_prompt, user_prompt)
 
@@ -124,6 +131,33 @@ class TranslationService:
                 response.raise_for_status()
                 data = response.json()
                 return data["content"][0].text.strip()
+        except Exception as e:
+            raise ValueError(f"Translation failed: {e}")
+
+    async def _translate_google(self, system_prompt: str, user_prompt: str) -> str:
+        """Translate using Google Gemini API"""
+        try:
+            # Google Gemini API: API key goes in URL, model in endpoint
+            url = f"{self.api_base}/models/{self.model}:generateContent?key={self.api_key}"
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(),
+                    json={
+                        "contents": [{
+                            "parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]
+                        }],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 4096,
+                        }
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                # Gemini response format: candidates[0].content.parts[0].text
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
             raise ValueError(f"Translation failed: {e}")
 

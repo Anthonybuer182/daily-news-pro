@@ -17,6 +17,7 @@ interface ModelConfig {
 const API_TYPE_OPTIONS = [
   { label: 'OpenAI 兼容', value: 'openai' },
   { label: 'Anthropic (Claude)', value: 'anthropic' },
+  { label: 'Google (Gemini)', value: 'google' },
 ]
 
 export default function ModelConfigs() {
@@ -96,7 +97,10 @@ export default function ModelConfigs() {
       title: 'API 类型',
       dataIndex: 'api_type',
       key: 'api_type',
-      render: (api_type: string) => api_type === 'anthropic' ? 'Anthropic' : 'OpenAI'
+      render: (api_type: string) => {
+      const map: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google' }
+      return map[api_type] || api_type
+    }
     },
     { title: 'API 地址', dataIndex: 'api_base', key: 'api_base', ellipsis: true },
     { title: '模型', dataIndex: 'model', key: 'model' },

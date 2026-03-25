@@ -9,7 +9,7 @@ class ModelConfig(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, unique=True)
-    api_type = Column(String(20), default="openai")  # openai / anthropic
+    api_type = Column(String(20), default="openai")  # openai / anthropic / google
     api_base = Column(String(500), nullable=False)
     api_key = Column(String(500), nullable=False)
     model = Column(String(100), nullable=False)
