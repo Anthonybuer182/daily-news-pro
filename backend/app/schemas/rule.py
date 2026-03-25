@@ -180,6 +180,31 @@ class RuleBase(BaseModel):
     status: str = Field(default="disabled", description="规则状态：disabled(禁用)、enabled(启用)。启用后会根据cron_expression执行定时抓取")
     cron_expression: Optional[str] = Field(default=None, description="Cron表达式，用于定时抓取。格式：'0 * * * *' (每小时)，'0 8 * * *' (每天早上8点)，'*/30 * * * *' (每30分钟)")
 
+    # 翻译配置
+    translation_config: Optional[str] = Field(
+        default=None,
+        description="""翻译配置，JSON格式。启用后会对抓取的标题、摘要、内容等进行翻译。
+
+【配置示例】
+{
+  "enabled": true,
+  "target_lang": "zh",
+  "source_lang": "en",
+  "fields": ["title", "summary", "content"],
+  "translate_summary": true,
+  "translate_content": true
+}
+
+【字段说明】
+• enabled: 是否启用翻译
+• target_lang: 目标语言 (zh/en/ja/ko/fr/de/es/ru/ar)
+• source_lang: 源语言 (空则自动检测)
+• fields: 要翻译的字段列表 ["title", "summary"]
+• translate_summary: 是否翻译摘要
+• translate_content: 是否翻译正文 (markdown)
+"""
+    )
+
 
 class RuleCreate(RuleBase):
     pass
