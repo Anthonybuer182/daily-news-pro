@@ -131,7 +131,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     enabled: true,
     target_lang: 'zh',
     source_lang: '',
-    fields: ['title', 'summary'] as string[],
+    fields: ['summary', 'content'] as string[],
   })
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             enabled: true,
             target_lang: 'zh',
             source_lang: '',
-            fields: ['title', 'summary'],
+            fields: ['summary', 'content'],
           })
         }
       } else {
@@ -167,7 +167,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           enabled: true,
           target_lang: 'zh',
           source_lang: '',
-          fields: ['title', 'summary'],
+          fields: ['summary', 'content'],
         })
       }
     } else if (visible) {
@@ -179,9 +179,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         enabled: true,
         target_lang: 'zh',
         source_lang: '',
-        fields: ['title', 'summary'],
-        translate_summary: true,
-        translate_content: true,
+        fields: ['summary', 'content'],
       })
       form.setFieldsValue({
         render: 'browser',
@@ -564,7 +562,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   enabled: true,
                   target_lang: 'zh',
                   source_lang: '',
-                  fields: ['title', 'summary'],
+                  fields: ['summary', 'content'],
                 })
               }
             }}
