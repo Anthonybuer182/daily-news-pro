@@ -12,6 +12,7 @@ from app.services.selector import SelectorParser
 from app.services.extract_engine import ExtractEngine
 from app.services.extract_strategies import StrategyRegistry
 from app.services.request_config import RequestConfigManager
+from app.services.translation import get_translation_service
 
 
 class CrawlerEngine:
@@ -236,6 +237,23 @@ class CrawlerEngine:
             return json.loads(self.rule.cookie_config)
         except:
             return None
+
+    def _get_translation_config(self) -> Optional[Dict]:
+        """获取翻译配置"""
+        if not self.rule.translation_config:
+            return None
+
+        try:
+            return json.loads(self.rule.translation_config)
+        except:
+            return None
+
+    def _should_translate(self) -> bool:
+        """检查是否需要翻译"""
+        config = self._get_translation_config()
+        if not config:
+            return False
+        return config.get("enabled", False)
 
     async def _crawl_http(self) -> Dict:
         """HTTP 抓取 - 根据 content_type 解析内容"""
@@ -1174,6 +1192,13 @@ class CrawlerEngine:
                 article.status = "success"
                 self.db.commit()
 
+                # 翻译处理
+                if self._should_translate():
+                    try:
+                        await self._translate_article(article, content)
+                    except Exception as e:
+                        self._log("warning", f"Translation failed for {article.title}: {e}")
+
                 success_count += 1
                 self._log("info", f"Extracted article: {article.title}")
 
@@ -1193,6 +1218,64 @@ class CrawlerEngine:
             "success": success_count,
             "failed": failed_count,
         }
+
+    async def _translate_article(self, article, content: Dict) -> None:
+        """翻译文章内容"""
+        config = self._get_translation_config()
+        if not config:
+            return
+
+        target_lang = config.get("target_lang", "zh")
+        source_lang = config.get("source_lang")
+        fields = config.get("fields", ["title", "summary"])
+
+        # 准备要翻译的数据
+        article_data = {
+            "title": article.title or "",
+            "summary": article.summary or "",
+        }
+
+        # 获取原文内容用于翻译
+        if content.get("text") or content.get("content"):
+            article_data["content"] = content.get("text") or content.get("content", "")
+
+        # 确定要翻译的字段
+        fields_to_translate = []
+        if "title" in fields:
+            fields_to_translate.append("title")
+        if "summary" in fields or config.get("translate_summary"):
+            fields_to_translate.append("summary")
+        if "content" in fields or config.get("translate_content"):
+            fields_to_translate.append("content")
+
+        # 执行翻译
+        translation_service = get_translation_service()
+        translated = await translation_service.translate_fields(
+            article_data,
+            fields_to_translate,
+            target_lang,
+            source_lang
+        )
+
+        # 更新文章
+        if "title" in translated and translated["title"]:
+            article.title = translated["title"]
+        if "summary" in translated and translated["summary"]:
+            article.summary = translated["summary"]
+        if "content" in translated and translated["content"]:
+            # 更新 markdown 文件中的内容
+            markdown_content = self._generate_markdown({
+                "title": article.title,
+                "text": translated["content"],
+                "author": content.get("author"),
+                "date": content.get("date"),
+                "image": content.get("image"),
+            }, article.url)
+            markdown_file = self._save_markdown(markdown_content, article.url)
+            article.markdown_file = markdown_file
+
+        self.db.commit()
+        self._log("info", f"Translated article: {article.title} to {target_lang}")
 
     async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
         """使用配置提取文章内容"""
