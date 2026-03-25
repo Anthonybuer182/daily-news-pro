@@ -127,7 +127,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const [render, setRender] = useState<string>('browser')
   const [contentType, setContentType] = useState<string>('html')
   const [translationFormData, setTranslationFormData] = useState({
-    target_lang: '',
+    target_lang: 'zh',
     source_lang: '',
     fields: ['summary', 'content'] as string[],
   })
@@ -150,14 +150,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           })
         } catch {
           setTranslationFormData({
-            target_lang: '',
+            target_lang: 'zh',
             source_lang: '',
             fields: ['summary', 'content'],
           })
         }
       } else {
         setTranslationFormData({
-          target_lang: '',
+          target_lang: 'zh',
           source_lang: '',
           fields: ['summary', 'content'],
         })
@@ -167,7 +167,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       setRender('browser')
       setContentType('html')
       setTranslationFormData({
-        target_lang: '',
+        target_lang: 'zh',
         source_lang: '',
         fields: ['summary', 'content'],
       })
