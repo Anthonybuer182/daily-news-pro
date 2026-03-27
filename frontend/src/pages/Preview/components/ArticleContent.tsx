@@ -6,11 +6,11 @@ const { Title, Text } = Typography
 
 interface ArticleContentProps {
   title: string
-  author: string
-  publish_time: string
+  author?: string
+  publish_time?: string
   content: string
-  cover_image: string
-  tags: string[]
+  cover_image?: string
+  tags?: string[]
   url?: string  // 原文链接
 }
 
