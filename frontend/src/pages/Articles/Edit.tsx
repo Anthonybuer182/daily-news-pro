@@ -122,7 +122,7 @@ export function Edit() {
             <div data-color-mode="light">
               <MDEditor
                 value={markdownContent}
-                onChange={setMarkdownContent}
+                onChange={(value) => setMarkdownContent(value || '')}
                 height={400}
                 preview="edit"
               />
