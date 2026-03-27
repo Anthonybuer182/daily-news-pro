@@ -27,7 +27,16 @@ export default function ArticleDetail() {
           getArticleMarkdown(parseInt(id))
         ]);
         setArticle(articleRes.data);
-        setMarkdown(markdownRes.data.content || '');
+        // Strip header lines (Source/Author/Date) from markdown
+        const rawMarkdown = markdownRes.data.content || '';
+        const cleanedMarkdown = rawMarkdown
+          .replace(/^\*\*Source\*\*:.*\n?/gm, '')
+          .replace(/^\*\*Author\*\*:.*\n?/gm, '')
+          .replace(/^\*\*Date\*\*:.*\n?/gm, '')
+          .replace(/^#.*\n?/, '') // Remove title line if it starts with #
+          .replace(/^\n+/, '') // Remove leading newlines
+          .trim();
+        setMarkdown(cleanedMarkdown);
       } catch (error) {
         message.error('加载文章失败');
         navigate('/preview');
