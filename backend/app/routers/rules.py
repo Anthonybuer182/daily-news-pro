@@ -1,14 +1,41 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models import Rule, RuleLevel, Job
+from app.models.tag import Tag
 from app.schemas import Rule as RuleSchema, RuleCreate, RuleUpdate
 from app.schemas import RuleLevel as RuleLevelSchema, RuleLevelCreate, RuleLevelUpdate
 from app.services.crawler import CrawlerEngine
 from datetime import datetime
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
+
+
+def get_effective_tag_config(rule: Rule, db: Session) -> dict:
+    """
+    获取规则的有效标签配置
+    标签池从数据库 tags 表读取，max_tags 硬编码为 3
+    """
+    # 从数据库获取所有标签作为标签池
+    tags = db.query(Tag).order_by(Tag.created_at.desc()).all()
+    tag_schema = [t.name for t in tags]
+
+    # 检查规则是否启用了 generate_tags
+    generate_tags = False
+    if rule.translation_config:
+        try:
+            trans_config = json.loads(rule.translation_config)
+            generate_tags = trans_config.get("generate_tags", False)
+        except:
+            pass
+
+    return {
+        "tag_schema": tag_schema,
+        "max_tags": 3,  # 硬编码
+        "generate_tags": generate_tags
+    }
 
 
 @router.get("", response_model=List[RuleSchema])
@@ -287,3 +314,17 @@ def delete_rule_level(rule_id: int, level_id: int, db: Session = Depends(get_db)
     db.delete(db_level)
     db.commit()
     return {"message": "Level deleted"}
+
+
+@router.get("/{rule_id}/effective-tag-schema")
+def get_rule_effective_tag_schema(rule_id: int, db: Session = Depends(get_db)):
+    """
+    获取规则的有效标签池配置（合并全局配置和规则配置）
+    source: "default" | "global" | "rule"
+    """
+    rule = db.query(Rule).filter(Rule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    effective_config = get_effective_tag_config(rule, db)
+    return effective_config

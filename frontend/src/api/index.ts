@@ -43,8 +43,6 @@ export const getArticles = (params?: {
   tags?: string;         // 逗号分隔的标签列表
 }) => api.get('/articles', { params });
 
-export const getTags = () => api.get('/articles/tags');
-
 export const getArticle = (id: number) => api.get(`/articles/${id}`)
 export const getArticleMarkdown = (id: number) => api.get(`/articles/${id}/markdown`)
 export const deleteArticle = (id: number) => api.delete(`/articles/${id}`)
@@ -87,5 +85,15 @@ export const createModelConfig = (data: any) => api.post('/model-configs', data)
 export const updateModelConfig = (id: number, data: any) => api.put(`/model-configs/${id}`, data)
 export const deleteModelConfig = (id: number) => api.delete(`/model-configs/${id}`)
 export const setDefaultModelConfig = (id: number) => api.post(`/model-configs/set-default/${id}`)
+
+// Tags (CRUD)
+export const getTags = () => api.get('/tags')
+export const createTag = (data: { name: string }) => api.post('/tags', data)
+export const updateTag = (id: number, data: { name: string }) => api.put(`/tags/${id}`, data)
+export const deleteTag = (id: number) => api.delete(`/tags/${id}`)
+export const batchCreateTags = (names: string[]) => api.post('/tags/batch', names)
+
+// Rule effective tag schema
+export const getRuleEffectiveTagSchema = (ruleId: number) => api.get(`/rules/${ruleId}/effective-tag-schema`)
 
 export default api

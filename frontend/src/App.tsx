@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Rules from './pages/Rules'
 import Jobs from './pages/Jobs'
 import Articles from './pages/Articles'
+import Tags from './pages/Tags'
 import Channels from './pages/Channels'
 import Logs from './pages/Logs'
 import ModelConfigs from './pages/ModelConfigs'
@@ -29,6 +30,7 @@ function App() {
                 <Route path="/rules" element={<Rules />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/articles" element={<Articles />} />
+                <Route path="/tags" element={<Tags />} />
                 <Route path="/channels" element={<Channels />} />
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/model-configs" element={<ModelConfigs />} />

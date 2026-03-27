@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import httpx
 from typing import Optional, Dict, List
@@ -6,6 +7,9 @@ from typing import Optional, Dict, List
 logger = logging.getLogger(__name__)
 
 MAX_TEXT_LENGTH = 50000  # Maximum text length for translation
+
+# 最多标签数（硬编码）
+DEFAULT_MAX_TAGS = 3
 
 
 class TranslationService:
@@ -25,12 +29,21 @@ class TranslationService:
             self.api_key = config.get("api_key", "")
             self.model = config.get("model", "gpt-4o-mini")
             self.timeout = 120  # 增加超时时间到 120 秒
+            # 标签配置（标签从数据库获取）
+            self.generate_tags = config.get("generate_tags", False)
+            self.tag_schema = config.get("tag_schema", [])
+            self.max_tags = DEFAULT_MAX_TAGS  # 硬编码
         else:
             self.api_type = os.getenv("LLM_API_TYPE", "openai")
             self.api_base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
             self.api_key = os.getenv("LLM_API_KEY", "")
             self.model = os.getenv("LLM_MODEL", "gpt-4o-mini")
             self.timeout = int(os.getenv("LLM_TIMEOUT", "60"))
+            # 标签配置（标签从数据库获取，环境变量仅用于调试）
+            self.generate_tags = os.getenv("GENERATE_TAGS", "false").lower() == "true"
+            tag_schema_env = os.getenv("TAG_SCHEMA", "")
+            self.tag_schema = tag_schema_env.split(",") if tag_schema_env else []
+            self.max_tags = DEFAULT_MAX_TAGS  # 硬编码
 
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers based on API type"""
@@ -382,3 +395,262 @@ def get_translation_service_with_config(db) -> TranslationService:
     if model_config:
         return TranslationService(config=model_config)
     return TranslationService()
+
+
+def get_translation_service_with_tag_config(db, rule_translation_config: dict = None) -> TranslationService:
+    """
+    Get translation service with full config (including tag settings).
+
+    Args:
+        db: Database session
+        rule_translation_config: Rule's translation_config dict (may contain generate_tags flag)
+
+    Returns:
+        TranslationService with tag config
+    """
+    model_config = get_default_model_config(db)
+    if not model_config:
+        model_config = {}
+
+    # 如果规则启用了打标签，设置标志
+    if rule_translation_config and rule_translation_config.get("generate_tags"):
+        model_config["generate_tags"] = True
+
+    # 标签池从数据库 tags 表读取
+    from app.models.tag import Tag
+    tags = db.query(Tag).all()
+    tag_names = [t.name for t in tags] if tags else []
+    logger.info(f"[Tag Config] Loaded {len(tag_names)} tags from database: {tag_names}")
+    model_config["tag_schema"] = tag_names
+
+    # max_tags 在 TranslationService 内部硬编码为 3
+
+    return TranslationService(config=model_config if model_config else None)
+
+
+# ==================== 打标签相关方法 ====================
+
+async def generate_tags_with_config(
+    db,
+    summary: str,
+    content: str = None,
+    translated_summary: str = None,
+    translated_content: str = None,
+    rule_translation_config: dict = None
+) -> List[str]:
+    """
+    根据文章内容生成标签（使用规则或全局标签配置）
+    """
+    logger.info(f"[Tags] generate_tags_with_config called: summary_len={len(summary) if summary else 0}, content_len={len(content) if content else 0}, translated_summary_len={len(translated_summary) if translated_summary else 0}, translated_content_len={len(translated_content) if translated_content else 0}")
+
+    service = get_translation_service_with_tag_config(db, rule_translation_config)
+    logger.info(f"[Tags] Service type: {type(service)}, has generate_tags method: {hasattr(service, 'generate_tags')}")
+    return await service.generate_tags(
+        summary=summary,
+        content=content,
+        translated_summary=translated_summary,
+        translated_content=translated_content
+    )
+
+
+class TranslationService(TranslationService):
+    """扩展：添加 generate_tags 方法"""
+
+    async def generate_tags(
+        self,
+        summary: str,
+        content: str = None,
+        translated_summary: str = None,
+        translated_content: str = None,
+    ) -> List[str]:
+        """
+        根据文章内容生成标签
+
+        Args:
+            summary: 原文摘要
+            content: 原文内容（前500字）
+            translated_summary: 翻译后摘要
+            translated_content: 翻译后内容（前500字）
+
+        Returns:
+            标签列表，如 ["AI", "科技"]
+        """
+        if not self.api_key:
+            logger.warning("[Tags] No API key configured, skipping tag generation")
+            return []
+
+        logger.info(f"[Tags] generate_tags called with tag_schema={self.tag_schema}, max_tags={self.max_tags}")
+
+        # 构建要分析的内容
+        text_to_analyze = ""
+        if translated_summary:
+            text_to_analyze += translated_summary + "\n\n"
+            if translated_content:
+                text_to_analyze += translated_content[:500]
+        elif summary:
+            text_to_analyze += summary + "\n\n"
+            if content:
+                text_to_analyze += content[:500]
+        else:
+            logger.warning("No content to analyze for tags")
+            return []
+
+        if not text_to_analyze.strip():
+            return []
+
+        # 构建 prompt
+        prompt = self._build_tag_prompt(text_to_analyze)
+
+        # 调用 LLM
+        try:
+            result = await self._call_llm_for_tags(prompt)
+            tags = self._parse_tags(result)
+            return tags
+        except Exception as e:
+            logger.warning(f"Failed to generate tags: {e}")
+            return []
+
+    def _build_tag_prompt(self, text: str) -> str:
+        """构建打标签 Prompt"""
+        tags_str = ", ".join(f'"{t}"' for t in self.tag_schema)
+        logger.info(f"[Tags] Building tag prompt with {len(self.tag_schema)} tags in schema")
+        return f"""你是一个新闻分类专家。根据以下文章内容，从给定标签池中选择最合适的标签。
+
+标签池（必须仅从以下标签中选择，最多选择 {self.max_tags} 个）：[{tags_str}]
+
+文章内容：
+{text}
+
+请选择最合适的标签，输出格式（严格按此格式，只输出JSON数组，不要任何其他内容）：
+["标签1", "标签2"]
+"""
+
+    def _parse_tags(self, result: str) -> List[str]:
+        """解析 LLM 返回的标签结果"""
+        logger.info(f"[Tags] Parsing LLM result: {result[:200] if result else 'empty'}")
+        if not result:
+            return []
+
+        try:
+            # 尝试直接解析 JSON
+            tags = json.loads(result.strip())
+            if isinstance(tags, list):
+                # 验证标签是否都在标签池中
+                valid_tags = [t for t in tags if t in self.tag_schema]
+                logger.info(f"[Tags] Parsed tags: {tags}, valid_tags after filter: {valid_tags}")
+                return valid_tags[:self.max_tags]
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试从文本中提取 JSON
+        import re
+        json_match = re.search(r'\[.*\]', result, re.DOTALL)
+        if json_match:
+            try:
+                tags = json.loads(json_match.group())
+                if isinstance(tags, list):
+                    valid_tags = [t for t in tags if t in self.tag_schema]
+                    logger.info(f"[Tags] Extracted tags from text: {tags}, valid_tags after filter: {valid_tags}")
+                    return valid_tags[:self.max_tags]
+            except json.JSONDecodeError:
+                pass
+
+        logger.warning("[Tags] Could not parse any valid tags from LLM result")
+        return []
+
+    async def _call_llm_for_tags(self, prompt: str) -> str:
+        """调用 LLM 生成标签（统一方法）"""
+        if self.api_type == "anthropic":
+            return await self._call_anthropic(prompt)
+        elif self.api_type == "google":
+            return await self._call_google(prompt)
+        else:
+            return await self._call_openai(prompt)
+
+    async def _call_openai(self, prompt: str) -> str:
+        """调用 OpenAI API"""
+        import asyncio
+
+        request_url = f"{self.api_base}" if self.api_base.endswith('/chat/completions') or '/chatcompletion' in self.api_base else f"{self.api_base}/chat/completions"
+        request_headers = self._get_headers()
+        request_json = {
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.3,
+        }
+
+        max_retries = 3
+        retry_delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        request_url,
+                        headers=request_headers,
+                        json=request_json
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+
+                    if not data or "choices" not in data or not data["choices"]:
+                        raise ValueError(f"Invalid API response: {data}")
+
+                    return data["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise ValueError(f"OpenAI API failed: {e}")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+
+    async def _call_anthropic(self, prompt: str) -> str:
+        """调用 Anthropic API"""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.api_base}/messages",
+                    headers=self._get_headers(),
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 4096,
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                if not data or "content" not in data or not data["content"]:
+                    raise ValueError(f"Invalid Anthropic API response: {data}")
+                return data["content"][0].text.strip()
+        except Exception as e:
+            raise ValueError(f"Anthropic API failed: {e}")
+
+    async def _call_google(self, prompt: str) -> str:
+        """调用 Google Gemini API"""
+        try:
+            url = f"{self.api_base}/models/{self.model}:generateContent?key={self.api_key}"
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    url,
+                    headers=self._get_headers(),
+                    json={
+                        "contents": [{
+                            "parts": [{"text": prompt}]
+                        }],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 4096,
+                        }
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                if not data or "candidates" not in data or not data["candidates"]:
+                    raise ValueError(f"Invalid Gemini API response: {data}")
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except Exception as e:
+            raise ValueError(f"Google Gemini API failed: {e}")

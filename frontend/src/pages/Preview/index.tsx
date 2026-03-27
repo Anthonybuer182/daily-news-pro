@@ -24,9 +24,10 @@ function PreviewContent() {
       setSources([...new Set(names)]);
     });
 
-    // 加载标签列表
+    // 加载标签列表（从标签管理表）
     getTags().then(res => {
-      setAvailableTags(res.data || []);
+      const tagNames = (res.data || []).map((t: any) => t.name);
+      setAvailableTags(tagNames);
     });
   }, []);
 

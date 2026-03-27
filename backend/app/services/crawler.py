@@ -1315,6 +1315,9 @@ class CrawlerEngine:
         self.db.commit()
         self._log("info", f"Translated article: {article.title} to {target_lang}")
 
+        # 打标签
+        await self._generate_article_tags(article, content, translated)
+
     async def _translate_and_update_article(self, article, content: Dict) -> None:
         """翻译并更新文章（通用方法）"""
         if not self._should_translate():
@@ -1386,8 +1389,65 @@ class CrawlerEngine:
 
             self.db.commit()
             self._log("info", f"Translated article: {article.title} to {target_lang}")
+
+            # ===== 新增：打标签 =====
+            await self._generate_article_tags(article, content, translated)
         except Exception as e:
             self._log("warning", f"Translation failed for {article.title}: {e}")
+
+    async def _generate_article_tags(self, article, content: Dict, translated: Dict = None) -> None:
+        """为文章生成标签（在翻译完成后调用）"""
+        import json
+
+        self._log("info", f"[Tags] DEBUG: Entered _generate_article_tags for article: {article.title}")
+
+        config = self._get_translation_config()
+        self._log("info", f"[Tags] DEBUG: config = {config}")
+
+        if not config:
+            self._log("warning", f"[Tags] No translation config for article: {article.title}")
+            return
+
+        # 检查是否启用打标签
+        self._log("info", f"[Tags] DEBUG: generate_tags = {config.get('generate_tags')}")
+        if not config.get("generate_tags"):
+            self._log("info", f"[Tags] generate_tags is not enabled in config for article: {article.title}")
+            return
+
+        self._log("info", f"[Tags] Starting tag generation for article: {article.title}, config: {config}")
+        try:
+            # 获取原文 content 前500字
+            raw_content = content.get("text") or content.get("content", "")[:500]
+
+            # 获取翻译后的 content 前500字
+            translated_content = None
+            if translated and translated.get("content"):
+                translated_content = translated["content"][:500]
+
+            # 获取翻译后的 summary
+            translated_summary = None
+            if translated and translated.get("summary"):
+                translated_summary = translated["summary"]
+
+            # 调用打标签服务
+            from app.services.translation import generate_tags_with_config
+            tags = await generate_tags_with_config(
+                db=self.db,
+                summary=article.summary or "",
+                content=raw_content,
+                translated_summary=translated_summary,
+                translated_content=translated_content,
+                rule_translation_config=config
+            )
+
+            if tags:
+                article.tags = json.dumps(tags, ensure_ascii=False)
+                self.db.commit()
+                self._log("info", f"Generated tags for {article.title}: {tags}")
+            else:
+                self._log("info", f"No tags generated for {article.title}")
+        except Exception as e:
+            self._log("warning", f"Failed to generate tags for {article.title}: {e}")
 
     async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
         """使用配置提取文章内容"""

@@ -15,22 +15,6 @@ class BatchDeleteRequest(BaseModel):
 router = APIRouter(prefix="/api/articles", tags=["articles"])
 
 
-@router.get("/tags")
-def get_tags(db: Session = Depends(get_db)):
-    """获取所有已使用的标签列表"""
-    articles = db.query(Article.tags).filter(Article.tags.isnot(None)).all()
-    all_tags = set()
-    for article in articles:
-        if article.tags:
-            try:
-                tags_list = json.loads(article.tags)
-                if isinstance(tags_list, list):
-                    all_tags.update(tags_list)
-            except Exception:
-                pass
-    return list(all_tags)
-
-
 @router.get("", response_model=List[ArticleSchema])
 def get_articles(
     skip: int = 0,

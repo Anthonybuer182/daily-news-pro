@@ -98,9 +98,9 @@ export default function ModelConfigs() {
       dataIndex: 'api_type',
       key: 'api_type',
       render: (api_type: string) => {
-      const map: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google' }
-      return map[api_type] || api_type
-    }
+        const map: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google' }
+        return map[api_type] || api_type
+      }
     },
     { title: 'API 地址', dataIndex: 'api_base', key: 'api_base', ellipsis: true },
     { title: '模型', dataIndex: 'model', key: 'model' },

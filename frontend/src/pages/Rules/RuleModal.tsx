@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox } from 'antd'
-import { createRule, updateRule } from '../../api'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox, Switch, Divider } from 'antd'
+import { createRule, updateRule, getRuleEffectiveTagSchema } from '../../api'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -131,7 +131,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     source_lang: '',
     fields: ['summary', 'content'] as string[],
     concurrency: 3,
+    generate_tags: false,
+    tag_schema: [] as string[],
+    max_tags: 3,
   })
+  const [effectiveTagConfig, setEffectiveTagConfig] = useState<{
+    tag_schema: string[]
+    generate_tags: boolean
+  }>({ tag_schema: [], generate_tags: false })
 
   useEffect(() => {
     if (visible && rule) {
@@ -149,6 +156,9 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             source_lang: config.source_lang || '',
             fields: config.fields || ['summary', 'content'],
             concurrency: config.concurrency || 3,
+            generate_tags: config.generate_tags || false,
+            tag_schema: config.tag_schema || [],
+            max_tags: config.max_tags || 3,
           })
         } catch {
           setTranslationFormData({
@@ -156,6 +166,9 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             source_lang: '',
             fields: ['summary', 'content'],
             concurrency: 3,
+            generate_tags: false,
+            tag_schema: [],
+            max_tags: 3,
           })
         }
       } else {
@@ -164,8 +177,13 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           source_lang: '',
           fields: ['summary', 'content'],
           concurrency: 3,
+          generate_tags: false,
+          tag_schema: [],
+          max_tags: 3,
         })
       }
+      // 获取有效的标签配置
+      fetchEffectiveTagConfig()
     } else if (visible) {
       form.resetFields()
       setRender('browser')
@@ -175,6 +193,9 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         source_lang: '',
         fields: ['summary', 'content'],
         concurrency: 3,
+        generate_tags: false,
+        tag_schema: [],
+        max_tags: 3,
       })
       form.setFieldsValue({
         render: 'browser',
@@ -183,20 +204,39 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         delay_max: 3,
         status: 'disabled',
       })
+      // 获取有效的标签配置
+      fetchEffectiveTagConfig()
     }
   }, [visible, rule])
+
+  // 获取规则的有效标签配置
+  const fetchEffectiveTagConfig = async () => {
+    if (rule) {
+      try {
+        const res = await getRuleEffectiveTagSchema(rule.id)
+        setEffectiveTagConfig(res.data)
+      } catch (error) {
+        console.error('获取标签配置失败', error)
+      }
+    }
+  }
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
       // 处理翻译配置 - 选择目标语言即启用翻译
       if (translationFormData.target_lang) {
-        values.translation_config = JSON.stringify({
+        const transConfig: any = {
           target_lang: translationFormData.target_lang,
           source_lang: translationFormData.source_lang,
           fields: translationFormData.fields,
           concurrency: translationFormData.concurrency,
-        })
+        }
+        // 如果启用了打标签
+        if (translationFormData.generate_tags) {
+          transConfig.generate_tags = true
+        }
+        values.translation_config = JSON.stringify(transConfig)
       } else {
         values.translation_config = undefined
       }
@@ -575,6 +615,33 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   />
                   <span style={{ color: '#999' }}>1-10，避免限流</span>
                 </Space>
+
+                <Divider style={{ margin: '8px 0' }} />
+
+                {/* 标签配置 */}
+                <Space>
+                  <span>自动打标签：</span>
+                  <Switch
+                    checked={translationFormData.generate_tags}
+                    onChange={(checked) => setTranslationFormData(prev => ({ ...prev, generate_tags: checked }))}
+                  />
+                  {translationFormData.generate_tags && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      共 {effectiveTagConfig.tag_schema.length} 个标签可用
+                    </Text>
+                  )}
+                </Space>
+
+                {translationFormData.generate_tags && translationFormData.target_lang && (
+                  <div style={{ marginLeft: 24, marginTop: 8 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      标签池：{effectiveTagConfig.tag_schema.length > 0
+                        ? effectiveTagConfig.tag_schema.slice(0, 5).join(', ') + (effectiveTagConfig.tag_schema.length > 5 ? '...' : '')
+                        : '暂无标签，请先在标签管理中添加'
+                      }
+                    </Text>
+                  </div>
+                )}
               </>
             )}
           </Space>

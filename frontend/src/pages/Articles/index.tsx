@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space } from 'antd'
 import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
-import { getArticles, getArticleMarkdown, batchDeleteArticles } from '../../api'
+import { getArticles, getArticleMarkdown, batchDeleteArticles, getTags } from '../../api'
+import { Select } from 'antd'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -14,15 +15,24 @@ export default function Articles() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 })
   const [searchForm] = Form.useForm()
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [searchParams, setSearchParams] = useState<{
     keyword?: string;
     start_date?: string;
     end_date?: string;
+    tags?: string;
   }>({})
 
   useEffect(() => {
     loadArticles()
   }, [pagination.current, pagination.pageSize, searchParams])
+
+  useEffect(() => {
+    getTags().then(res => {
+      const tagNames = (res.data || []).map((t: any) => t.name)
+      setAvailableTags(tagNames)
+    })
+  }, [])
 
   const loadArticles = async () => {
     setLoading(true)
@@ -32,7 +42,8 @@ export default function Articles() {
         limit: pagination.pageSize,
         keyword: searchParams.keyword,
         start_date: searchParams.start_date,
-        end_date: searchParams.end_date
+        end_date: searchParams.end_date,
+        tags: searchParams.tags
       })
       setArticles(res.data)
       const total = res.headers['x-total-count'] || res.data.length
@@ -79,7 +90,8 @@ export default function Articles() {
     setSearchParams({
       keyword: values.keyword,
       start_date: values.dateRange?.[0]?.format('YYYY-MM-DD'),
-      end_date: values.dateRange?.[1]?.format('YYYY-MM-DD')
+      end_date: values.dateRange?.[1]?.format('YYYY-MM-DD'),
+      tags: values.tags?.join(',')
     })
   }
 
@@ -87,6 +99,11 @@ export default function Articles() {
     searchForm.resetFields()
     setPagination(prev => ({ ...prev, current: 1 }))
     setSearchParams({})
+  }
+
+  const renderTags = (tags: string[]) => {
+    if (!tags || tags.length === 0) return '-'
+    return tags.map(tag => <Tag key={tag} color="blue" style={{ marginBottom: 4 }}>{tag}</Tag>)
   }
 
   const getStatusColor = (status: string) => {
@@ -137,6 +154,9 @@ export default function Articles() {
     { title: '创建时间', dataIndex: 'created_at', key: 'created_at',
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm')
     },
+    { title: '标签', dataIndex: 'tags', key: 'tags',
+      render: (v: string[]) => renderTags(v)
+    },
     { title: '操作', key: 'action', width: 120,
       render: (_: any, record: any) => (
         <Button type="link" icon={<EyeOutlined />} onClick={() => handlePreview(record.id)} />
@@ -159,6 +179,16 @@ export default function Articles() {
           </Form.Item>
           <Form.Item name="dateRange" label="创建时间">
             <RangePicker format="YYYY-MM-DD" allowClear />
+          </Form.Item>
+          <Form.Item name="tags" label="标签">
+            <Select
+              placeholder="选择标签"
+              allowClear
+              style={{ width: 150 }}
+              mode="multiple"
+              maxTagCount={2}
+              options={availableTags.map(t => ({ label: t, value: t }))}
+            />
           </Form.Item>
           <Form.Item>
             <Space>
