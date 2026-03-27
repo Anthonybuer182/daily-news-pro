@@ -77,13 +77,14 @@ export default function Articles() {
         setPreviewArticle(article)
       }
       const res = await getArticleMarkdown(id)
-      // Strip header lines (Source/Author/Date) from markdown
+      // Strip header lines (Source/Author/Date) and cover image from markdown
       const rawMarkdown = res.data.content || ''
       const cleanedMarkdown = rawMarkdown
         .replace(/^\*\*Source\*\*:.*\n?/gm, '')
         .replace(/^\*\*Author\*\*:.*\n?/gm, '')
         .replace(/^\*\*Date\*\*:.*\n?/gm, '')
         .replace(/^#.*\n?/, '') // Remove title line if it starts with #
+        .replace(/^!\[[^\]]*\]\([^)]*\)\n?/gm, '') // Remove ![Cover](url) image
         .replace(/^\n+/, '') // Remove leading newlines
         .trim()
       setMarkdown(cleanedMarkdown)
@@ -263,8 +264,8 @@ export default function Articles() {
         {previewArticle && (
           <ArticleContent
             title={previewArticle.title}
-            author={undefined}
-            publish_time={undefined}
+            author={previewArticle.author}
+            publish_time={previewArticle.publish_time ? dayjs(previewArticle.publish_time).format('YYYY-MM-DD HH:mm') : undefined}
             content={markdown}
             cover_image={previewArticle.cover_image}
             tags={previewArticle.tags || []}

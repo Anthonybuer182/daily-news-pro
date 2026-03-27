@@ -27,13 +27,14 @@ export default function ArticleDetail() {
           getArticleMarkdown(parseInt(id))
         ]);
         setArticle(articleRes.data);
-        // Strip header lines (Source/Author/Date) from markdown
+        // Strip header lines (Source/Author/Date) and cover image from markdown
         const rawMarkdown = markdownRes.data.content || '';
         const cleanedMarkdown = rawMarkdown
           .replace(/^\*\*Source\*\*:.*\n?/gm, '')
           .replace(/^\*\*Author\*\*:.*\n?/gm, '')
           .replace(/^\*\*Date\*\*:.*\n?/gm, '')
           .replace(/^#.*\n?/, '') // Remove title line if it starts with #
+          .replace(/^!\[[^\]]*\]\([^)]*\)\n?/gm, '') // Remove ![Cover](url) image
           .replace(/^\n+/, '') // Remove leading newlines
           .trim();
         setMarkdown(cleanedMarkdown);
