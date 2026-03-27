@@ -27,7 +27,7 @@ class ArticleUpdate(BaseModel):
     author: Optional[str] = None
     publish_time: Optional[datetime] = None
     cover_image: Optional[str] = None
-    markdown_file: Optional[str] = None
+    markdown_content: Optional[str] = None  # Not stored in DB, used to update markdown file
     status: Optional[str] = None
     error_message: Optional[str] = None
     tags: Optional[List[str]] = None
