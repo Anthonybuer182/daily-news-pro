@@ -52,12 +52,10 @@ function PreviewContent() {
       <Content style={{ padding: 24 }}>
         <Card style={{ marginBottom: 16 }}>
           <SourceTabs sources={sources} />
-        </Card>
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 500 }}>时间:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 16 }}>
             <TimeFilter />
-            <span style={{ fontWeight: 500, marginLeft: 16 }}>标签:</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
             <TagFilter availableTags={availableTags} />
           </div>
         </Card>
