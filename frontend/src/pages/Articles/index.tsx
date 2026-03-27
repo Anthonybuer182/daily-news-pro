@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space } from 'antd'
 import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined, EditOutlined } from '@ant-design/icons'
 import { getArticles, getArticleMarkdown, batchDeleteArticles, getTags } from '../../api'
+import ArticleContent from '../Preview/components/ArticleContent'
 import { Select } from 'antd'
 import dayjs from 'dayjs'
 
@@ -15,6 +16,7 @@ export default function Articles() {
   const [loading, setLoading] = useState(false)
   const [articles, setArticles] = useState([])
   const [previewVisible, setPreviewVisible] = useState(false)
+  const [previewArticle, setPreviewArticle] = useState<any>(null)
   const [markdown, setMarkdown] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 })
@@ -69,6 +71,11 @@ export default function Articles() {
 
   const handlePreview = async (id: number) => {
     try {
+      // Find the article from the current list
+      const article = articles.find(a => a.id === id)
+      if (article) {
+        setPreviewArticle(article)
+      }
       const res = await getArticleMarkdown(id)
       setMarkdown(res.data.content || '')
       setPreviewVisible(true)
@@ -242,11 +249,18 @@ export default function Articles() {
         open={previewVisible}
         onCancel={() => setPreviewVisible(false)}
         footer={null}
-        width={800}
+        width={900}
       >
-        <pre style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflow: 'auto' }}>
-          {markdown}
-        </pre>
+        {previewArticle && (
+          <ArticleContent
+            title={previewArticle.title}
+            author={previewArticle.author}
+            publish_time={previewArticle.publish_time}
+            content={markdown}
+            cover_image={previewArticle.cover_image}
+            tags={previewArticle.tags || []}
+          />
+        )}
       </Modal>
     </div>
   )
