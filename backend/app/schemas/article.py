@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
+import json
 
 
 class ArticleBase(BaseModel):
@@ -38,7 +39,17 @@ class Article(ArticleBase):
     updated_at: datetime
     rule_render: Optional[str] = None
     rule_name: Optional[str] = None
-    tags: Optional[List[str]] = []  # 新增
+    tags: Optional[List[str]] = []
+
+    @field_validator('tags', mode='before')
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        return v or []
 
     class Config:
         from_attributes = True

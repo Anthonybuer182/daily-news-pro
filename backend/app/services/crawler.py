@@ -1238,6 +1238,7 @@ class CrawlerEngine:
 
     async def _translate_article(self, article, content: Dict) -> None:
         """翻译文章内容"""
+        self._log("info", f"[TranslateArticle] START for article: {article.title}")
         config = self._get_translation_config()
         if not config:
             self._log("warning", f"No translation config for article: {article.title}")
@@ -1398,10 +1399,19 @@ class CrawlerEngine:
     async def _generate_article_tags(self, article, content: Dict, translated: Dict = None) -> None:
         """为文章生成标签（在翻译完成后调用）"""
         import json
+        import sys
+        print(f"[TAGS_PRINT1] _generate_article_tags called for: {article.title}", flush=True)
 
-        self._log("info", f"[Tags] DEBUG: Entered _generate_article_tags for article: {article.title}")
+        try:
+            self._log("info", f"[Tags] DEBUG: Entered _generate_article_tags for article: {article.title}")
+            print(f"[TAGS_PRINT2] _log succeeded", flush=True)
+        except Exception as log_e:
+            print(f"[TAGS_PRINT2] _log failed: {log_e}", flush=True)
+            import traceback
+            traceback.print_exc()
 
         config = self._get_translation_config()
+        print(f"[TAGS_PRINT3] config = {config}", flush=True)
         self._log("info", f"[Tags] DEBUG: config = {config}")
 
         if not config:
@@ -1409,45 +1419,62 @@ class CrawlerEngine:
             return
 
         # 检查是否启用打标签
+        print(f"[TAGS_PRINT4] About to check generate_tags, config.get('generate_tags') = {config.get('generate_tags')}", flush=True)
         self._log("info", f"[Tags] DEBUG: generate_tags = {config.get('generate_tags')}")
         if not config.get("generate_tags"):
             self._log("info", f"[Tags] generate_tags is not enabled in config for article: {article.title}")
             return
 
+        print(f"[TAGS_PRINT5] generate_tags is True, continuing...", flush=True)
         self._log("info", f"[Tags] Starting tag generation for article: {article.title}, config: {config}")
         try:
             # 获取原文 content 前500字
             raw_content = content.get("text") or content.get("content", "")[:500]
+            self._log("info", f"[Tags] raw_content length: {len(raw_content)}")
 
             # 获取翻译后的 content 前500字
             translated_content = None
             if translated and translated.get("content"):
                 translated_content = translated["content"][:500]
+            self._log("info", f"[Tags] translated_content length: {len(translated_content) if translated_content else 0}")
 
             # 获取翻译后的 summary
             translated_summary = None
             if translated and translated.get("summary"):
                 translated_summary = translated["summary"]
+            self._log("info", f"[Tags] translated_summary length: {len(translated_summary) if translated_summary else 0}")
+
+            self._log("info", f"[Tags] About to call generate_tags_with_config")
 
             # 调用打标签服务
             from app.services.translation import generate_tags_with_config
-            tags = await generate_tags_with_config(
-                db=self.db,
-                summary=article.summary or "",
-                content=raw_content,
-                translated_summary=translated_summary,
-                translated_content=translated_content,
-                rule_translation_config=config
-            )
+            print(f"[TAGS_PRINT6] About to call generate_tags_with_config, db={self.db}", flush=True)
+            try:
+                tags = await generate_tags_with_config(
+                    db=self.db,
+                    summary=article.summary or "",
+                    content=raw_content,
+                    translated_summary=translated_summary,
+                    translated_content=translated_content,
+                    rule_translation_config=config
+                )
+                print(f"[TAGS_PRINT7] Returned from generate_tags_with_config, tags={tags}", flush=True)
+                self._log("info", f"[Tags] Returned from generate_tags_with_config, tags: {tags}")
+            except Exception as tag_e:
+                print(f"[TAGS_PRINT7] Exception in generate_tags_with_config: {tag_e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                self._log("warning", f"[Tags] Exception in generate_tags_with_config: {tag_e}")
+                tags = []
 
             if tags:
                 article.tags = json.dumps(tags, ensure_ascii=False)
                 self.db.commit()
-                self._log("info", f"Generated tags for {article.title}: {tags}")
+                self._log("info", f"[Tags] Generated tags for {article.title}: {tags}")
             else:
-                self._log("info", f"No tags generated for {article.title}")
+                self._log("info", f"[Tags] No tags generated for {article.title}")
         except Exception as e:
-            self._log("warning", f"Failed to generate tags for {article.title}: {e}")
+            self._log("warning", f"[Tags] Outer exception in _generate_article_tags: {e}")
 
     async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
         """使用配置提取文章内容"""

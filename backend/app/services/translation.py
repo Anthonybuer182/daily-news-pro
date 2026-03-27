@@ -30,7 +30,7 @@ class TranslationService:
             self.model = config.get("model", "gpt-4o-mini")
             self.timeout = 120  # 增加超时时间到 120 秒
             # 标签配置（标签从数据库获取）
-            self.generate_tags = config.get("generate_tags", False)
+            self.generate_tags_enabled = config.get("generate_tags", False)
             self.tag_schema = config.get("tag_schema", [])
             self.max_tags = DEFAULT_MAX_TAGS  # 硬编码
         else:
@@ -40,7 +40,7 @@ class TranslationService:
             self.model = os.getenv("LLM_MODEL", "gpt-4o-mini")
             self.timeout = int(os.getenv("LLM_TIMEOUT", "60"))
             # 标签配置（标签从数据库获取，环境变量仅用于调试）
-            self.generate_tags = os.getenv("GENERATE_TAGS", "false").lower() == "true"
+            self.generate_tags_enabled = os.getenv("GENERATE_TAGS", "false").lower() == "true"
             tag_schema_env = os.getenv("TAG_SCHEMA", "")
             self.tag_schema = tag_schema_env.split(",") if tag_schema_env else []
             self.max_tags = DEFAULT_MAX_TAGS  # 硬编码
