@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space } from 'antd'
-import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
+import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined, EditOutlined } from '@ant-design/icons'
 import { getArticles, getArticleMarkdown, batchDeleteArticles, getTags } from '../../api'
 import { Select } from 'antd'
 import dayjs from 'dayjs'
@@ -10,6 +11,7 @@ const { RangePicker } = DatePicker
 export { Edit } from './Edit'
 
 export default function Articles() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [articles, setArticles] = useState([])
   const [previewVisible, setPreviewVisible] = useState(false)
@@ -159,9 +161,12 @@ export default function Articles() {
     { title: '标签', dataIndex: 'tags', key: 'tags',
       render: (v: string[]) => renderTags(v)
     },
-    { title: '操作', key: 'action', width: 120,
+    { title: '操作', key: 'action', width: 150,
       render: (_: any, record: any) => (
-        <Button type="link" icon={<EyeOutlined />} onClick={() => handlePreview(record.id)} />
+        <Space>
+          <Button type="link" icon={<EditOutlined />} onClick={() => navigate(`/articles/edit/${record.id}`)} />
+          <Button type="link" icon={<EyeOutlined />} onClick={() => handlePreview(record.id)} />
+        </Space>
       )
     },
   ]
