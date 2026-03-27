@@ -12,13 +12,17 @@ const { TextArea } = Input
 export function Edit() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const [markdownContent, setMarkdownContent] = useState('')
   const [availableTags, setAvailableTags] = useState<string[]>([])
 
   useEffect(() => {
+    if (!id) {
+      message.error('文章ID无效')
+      navigate('/articles')
+      return
+    }
     // Load article data and tags in parallel
     Promise.all([
       getArticle(Number(id)),
