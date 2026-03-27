@@ -133,7 +133,7 @@ export default function NewsCard({ article }: NewsCardProps) {
         <div style={{ padding: '16px' }}>
           <h3 style={{
             fontSize: 16,
-            fontWeight: 600,
+            fontWeight: 700,
             marginBottom: 8,
             color: isDarkMode ? '#e8e8e8' : 'rgba(0,0,0,0.88)',
             display: '-webkit-box',
