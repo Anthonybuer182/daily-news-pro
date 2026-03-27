@@ -254,8 +254,8 @@ export default function Articles() {
         {previewArticle && (
           <ArticleContent
             title={previewArticle.title}
-            author={previewArticle.author}
-            publish_time={previewArticle.publish_time}
+            author={undefined}
+            publish_time={undefined}
             content={markdown}
             cover_image={previewArticle.cover_image}
             tags={previewArticle.tags || []}
