@@ -1,4 +1,5 @@
-import { Typography } from 'antd'
+import { Typography, Button } from 'antd'
+import { ExportOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 
 const { Title, Text } = Typography
@@ -10,6 +11,7 @@ interface ArticleContentProps {
   content: string
   cover_image: string
   tags: string[]
+  url?: string  // 原文链接
 }
 
 export default function ArticleContent({
@@ -18,7 +20,8 @@ export default function ArticleContent({
   publish_time,
   content,
   cover_image,
-  tags
+  tags,
+  url
 }: ArticleContentProps) {
   const isDarkMode = document.body.classList.contains('dark-mode')
 
@@ -84,6 +87,17 @@ export default function ArticleContent({
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* View Original Link */}
+      {url && (
+        <div style={{ marginBottom: 24 }}>
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <Button icon={<ExportOutlined />} size="small">
+              查看原文
+            </Button>
+          </a>
         </div>
       )}
 

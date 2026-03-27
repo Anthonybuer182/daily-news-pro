@@ -77,7 +77,16 @@ export default function Articles() {
         setPreviewArticle(article)
       }
       const res = await getArticleMarkdown(id)
-      setMarkdown(res.data.content || '')
+      // Strip header lines (Source/Author/Date) from markdown
+      const rawMarkdown = res.data.content || ''
+      const cleanedMarkdown = rawMarkdown
+        .replace(/^\*\*Source\*\*:.*\n?/gm, '')
+        .replace(/^\*\*Author\*\*:.*\n?/gm, '')
+        .replace(/^\*\*Date\*\*:.*\n?/gm, '')
+        .replace(/^#.*\n?/, '') // Remove title line if it starts with #
+        .replace(/^\n+/, '') // Remove leading newlines
+        .trim()
+      setMarkdown(cleanedMarkdown)
       setPreviewVisible(true)
     } catch (error) {
       message.error('加载失败')
@@ -259,6 +268,7 @@ export default function Articles() {
             content={markdown}
             cover_image={previewArticle.cover_image}
             tags={previewArticle.tags || []}
+            url={previewArticle.url}
           />
         )}
       </Modal>
