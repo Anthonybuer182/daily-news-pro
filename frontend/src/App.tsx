@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar'
 import Dashboard from './pages/Dashboard'
 import Rules from './pages/Rules'
 import Jobs from './pages/Jobs'
-import Articles from './pages/Articles'
+import Articles, { Edit as ArticleEdit } from './pages/Articles'
 import Tags from './pages/Tags'
 import Channels from './pages/Channels'
 import Logs from './pages/Logs'
@@ -30,6 +30,7 @@ function App() {
                 <Route path="/rules" element={<Rules />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/articles" element={<Articles />} />
+                <Route path="/articles/edit/:id" element={<ArticleEdit />} />
                 <Route path="/tags" element={<Tags />} />
                 <Route path="/channels" element={<Channels />} />
                 <Route path="/logs" element={<Logs />} />
