@@ -60,6 +60,15 @@
 
 ### 1.5 API 变更
 
+**复用现有 API**:
+
+| 用途 | 端点 | 说明 |
+|------|------|------|
+| 获取文章详情 | `GET /api/articles/{id}` | 已存在，用于加载编辑数据 |
+| 获取文章正文 | `GET /api/articles/{id}/markdown` | 已存在，获取 Markdown 内容 |
+| 获取标签列表 | `GET /api/tags` | 已存在（`getTags`），用于填充标签选择 |
+| 更新文章 | `PUT /api/articles/{id}` | **新增** |
+
 **新增后端接口**:
 
 ```typescript
@@ -86,13 +95,26 @@
 
 ```typescript
 // src/api/index.ts
-updateArticle(id: number, data: {...}) => api.put(`/articles/${id}`, data)
+// 复用现有
+getArticle(id: number) => api.get(`/articles/${id}`)
+getArticleMarkdown(id: number) => api.get(`/articles/${id}/markdown`)
+getTags() => api.get('/tags')
+
+// 新增
+updateArticle(id: number, data: {
+  title?: string;
+  author?: string;
+  summary?: string;
+  markdown_content?: string;
+  cover_image?: string;
+  tags?: string[];
+}) => api.put(`/articles/${id}`, data)
 ```
 
 ### 1.6 交互流程
 
 1. 文章列表点击编辑图标 → `navigate(/articles/edit/${id})`
-2. 编辑页加载时获取文章详情 + Markdown 内容
+2. 编辑页加载时调用 `getArticle(id)` + `getArticleMarkdown(id)` 获取数据
 3. 用户编辑，点击保存 → 调用 `updateArticle` → 成功后 `navigate(/articles)`
 4. 点击取消 → `navigate(/articles)`
 
