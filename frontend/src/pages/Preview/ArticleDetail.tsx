@@ -104,14 +104,16 @@ export default function ArticleDetail() {
         </div>
       </Header>
       <Content style={{ padding: '24px 0' }}>
-        <ArticleContent
-          title={article.title}
-          author={article.author}
-          publish_time={article.publish_time}
-          content={markdown}
-          cover_image={article.cover_image}
-          tags={tags}
-        />
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: '16px' }}>
+          <ArticleContent
+            title={article.title}
+            author={article.author}
+            publish_time={article.publish_time}
+            content={markdown}
+            cover_image={article.cover_image}
+            tags={tags}
+          />
+        </div>
       </Content>
     </Layout>
   );
