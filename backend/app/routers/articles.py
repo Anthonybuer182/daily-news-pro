@@ -1,4 +1,5 @@
 import json
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
@@ -13,6 +14,19 @@ class BatchDeleteRequest(BaseModel):
     ids: List[int]
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
+
+# Markdown files should be stored within this directory
+MARKDOWN_BASE_DIR = "data/articles"
+
+
+def is_path_safe(markdown_file: str) -> bool:
+    """Validate that the markdown file path is within the expected directory."""
+    if not markdown_file:
+        return False
+    # Resolve the full path and check if it's within MARKDOWN_BASE_DIR
+    abs_path = os.path.abspath(markdown_file)
+    abs_base = os.path.abspath(MARKDOWN_BASE_DIR)
+    return abs_path.startswith(abs_base + os.sep) or abs_path == abs_base
 
 
 @router.get("", response_model=List[ArticleSchema])
@@ -111,6 +125,9 @@ def update_article(article_id: int, article_update: ArticleUpdate, db: Session =
     if 'markdown_content' in update_data:
         content = update_data.pop('markdown_content')
         if article.markdown_file:
+            # Validate path to prevent path traversal attacks
+            if not is_path_safe(article.markdown_file):
+                raise HTTPException(status_code=400, detail="Invalid markdown file path")
             try:
                 with open(article.markdown_file, 'w', encoding='utf-8') as f:
                     f.write(content)
@@ -133,6 +150,9 @@ def get_article_markdown(article_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Article not found")
     if not article.markdown_file:
         return {"content": ""}
+    # Validate path to prevent path traversal attacks
+    if not is_path_safe(article.markdown_file):
+        raise HTTPException(status_code=400, detail="Invalid markdown file path")
     try:
         with open(article.markdown_file, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -148,11 +168,13 @@ def delete_article(article_id: int, db: Session = Depends(get_db)):
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     # 删除关联的 markdown 文件
-    if article.markdown_file and os.path.exists(article.markdown_file):
-        try:
-            os.remove(article.markdown_file)
-        except Exception:
-            pass
+    if article.markdown_file:
+        # Validate path to prevent path traversal attacks
+        if is_path_safe(article.markdown_file) and os.path.exists(article.markdown_file):
+            try:
+                os.remove(article.markdown_file)
+            except Exception:
+                pass
     db.delete(article)
     db.commit()
     return {"message": "Article deleted"}
@@ -167,11 +189,13 @@ def batch_delete_articles(request: BatchDeleteRequest, db: Session = Depends(get
         article = db.query(Article).filter(Article.id == article_id).first()
         if article:
             # 删除关联的 markdown 文件
-            if article.markdown_file and os.path.exists(article.markdown_file):
-                try:
-                    os.remove(article.markdown_file)
-                except Exception:
-                    pass
+            if article.markdown_file:
+                # Validate path to prevent path traversal attacks
+                if is_path_safe(article.markdown_file) and os.path.exists(article.markdown_file):
+                    try:
+                        os.remove(article.markdown_file)
+                    except Exception:
+                        pass
             db.delete(article)
             deleted_count += 1
     db.commit()
