@@ -7,6 +7,8 @@ import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
 
+export { Edit } from './Edit'
+
 export default function Articles() {
   const [loading, setLoading] = useState(false)
   const [articles, setArticles] = useState([])
