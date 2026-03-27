@@ -48,6 +48,16 @@ export const getArticleMarkdown = (id: number) => api.get(`/articles/${id}/markd
 export const deleteArticle = (id: number) => api.delete(`/articles/${id}`)
 export const batchDeleteArticles = (ids: number[]) => api.post('/articles/batch-delete', { ids })
 
+// Articles - update
+export const updateArticle = (id: number, data: {
+  title?: string;
+  author?: string;
+  summary?: string;
+  markdown_content?: string;
+  cover_image?: string;
+  tags?: string[];
+}) => api.put(`/articles/${id}`, data)
+
 // Preview
 export const previewCrawl = (url: string, ruleId?: number) => api.post('/preview', { url, rule_id: ruleId })
 
