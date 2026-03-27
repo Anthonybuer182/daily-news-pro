@@ -14,7 +14,7 @@ export { Edit } from './Edit'
 export default function Articles() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
-  const [articles, setArticles] = useState([])
+  const [articles, setArticles] = useState<any[]>([])
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewArticle, setPreviewArticle] = useState<any>(null)
   const [markdown, setMarkdown] = useState('')
