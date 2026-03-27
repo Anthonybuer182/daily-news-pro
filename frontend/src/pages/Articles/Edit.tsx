@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Form, Input, Button, message, Space, Select, Breadcrumb } from 'antd'
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons'
 import '@uiw/react-md-editor/markdown-editor.css'
-import '@uiw/react-md-editor/markdown.css'
 import { getArticle, getArticleMarkdown, updateArticle, getTags } from '../../api'
 import MDEditor from '@uiw/react-md-editor'
 
