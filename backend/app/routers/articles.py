@@ -92,6 +92,40 @@ def get_article(article_id: int, db: Session = Depends(get_db)):
     return article
 
 
+@router.put("/{article_id}", response_model=ArticleSchema)
+def update_article(article_id: int, article_update: ArticleUpdate, db: Session = Depends(get_db)):
+    """更新文章"""
+    import os
+    import json
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    update_data = article_update.model_dump(exclude_unset=True)
+
+    # 处理 tags 字段（从 List 转为 JSON 字符串存储）
+    if 'tags' in update_data:
+        update_data['tags'] = json.dumps(update_data['tags'], ensure_ascii=False)
+
+    # 如果提供了 markdown_content，更新 markdown 文件
+    if 'markdown_content' in update_data:
+        content = update_data.pop('markdown_content')
+        if article.markdown_file:
+            try:
+                with open(article.markdown_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to write markdown file: {str(e)}")
+
+    # 更新其他字段
+    for field, value in update_data.items():
+        setattr(article, field, value)
+
+    db.commit()
+    db.refresh(article)
+    return article
+
+
 @router.get("/{article_id}/markdown")
 def get_article_markdown(article_id: int, db: Session = Depends(get_db)):
     article = db.query(Article).filter(Article.id == article_id).first()
