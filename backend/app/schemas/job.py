@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class JobBase(BaseModel):
-    rule_id: int
+    rule_id: Optional[int] = None
     trigger_type: str = "manual"
 
 
