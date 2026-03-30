@@ -63,20 +63,15 @@ function PreviewContent() {
             <SourceTabs sources={sources} />
           </div>
 
-          {/* 时间和标签筛选 */}
+          {/* 标签和时间筛选 */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 24,
             flexWrap: 'wrap'
           }}>
-            <TimeFilter />
-            <div style={{
-              height: 24,
-              width: 1,
-              background: '#e8e8e8'
-            }} />
             <TagFilter availableTags={availableTags} />
+            <TimeFilter />
           </div>
         </div>
 
