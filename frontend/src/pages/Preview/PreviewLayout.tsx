@@ -1,5 +1,4 @@
 import { ReactNode } from 'react';
-import { ThemeProvider } from './context/ThemeContext';
 import { FilterProvider } from './context/FilterContext';
 
 interface PreviewLayoutProps {
@@ -8,10 +7,8 @@ interface PreviewLayoutProps {
 
 export default function PreviewLayout({ children }: PreviewLayoutProps) {
   return (
-    <ThemeProvider>
-      <FilterProvider>
-        {children}
-      </FilterProvider>
-    </ThemeProvider>
+    <FilterProvider>
+      {children}
+    </FilterProvider>
   );
 }

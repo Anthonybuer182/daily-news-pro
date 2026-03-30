@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Card } from 'antd';
+import { Layout, Typography, Space } from 'antd';
 import Header from './components/Header';
 import SourceTabs from './components/SourceTabs';
 import TimeFilter from './components/TimeFilter';
@@ -9,6 +9,7 @@ import { useFilter } from './context/FilterContext';
 import { getRules, getTags } from '../../api';
 
 const { Content } = Layout;
+const { Text } = Typography;
 
 function PreviewContent() {
   const { filter, setFilter } = useFilter();
@@ -18,13 +19,11 @@ function PreviewContent() {
   const [keyword, setKeyword] = useState('');
 
   useEffect(() => {
-    // 加载来源列表
     getRules().then(res => {
       const names: string[] = res.data.map((r: any) => r.name).filter(Boolean);
       setSources([...new Set(names)]);
     });
 
-    // 加载标签列表（从标签管理表）
     getTags().then(res => {
       const tagNames = (res.data || []).map((t: any) => t.name);
       setAvailableTags(tagNames);
@@ -43,25 +42,58 @@ function PreviewContent() {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: '#fafafa' }}>
       <Header
         keyword={keyword}
         onKeywordChange={handleKeywordChange}
         onSearch={handleSearch}
       />
-      <Content style={{ padding: 24 }}>
-        <Card style={{ marginBottom: 16 }}>
-          <SourceTabs sources={sources} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 16 }}>
-            <TimeFilter />
+      <Content style={{ padding: '24px 32px' }}>
+        {/* 筛选栏 */}
+        <div style={{
+          background: '#fff',
+          borderRadius: 16,
+          padding: '20px 24px',
+          marginBottom: 20,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          border: '1px solid rgba(0,0,0,0.04)',
+        }}>
+          {/* 来源筛选 */}
+          <div style={{ marginBottom: 16 }}>
+            <SourceTabs sources={sources} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+
+          {/* 时间和标签筛选 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            flexWrap: 'wrap'
+          }}>
+            <TimeFilter />
+            <div style={{
+              height: 24,
+              width: 1,
+              background: '#e8e8e8'
+            }} />
             <TagFilter availableTags={availableTags} />
           </div>
-        </Card>
-        <div style={{ marginBottom: 16, color: '#666' }}>
-          共 {total} 篇新闻
         </div>
+
+        {/* 结果统计 */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16
+        }}>
+          <Space>
+            <Text style={{ fontSize: 14, color: '#666' }}>共</Text>
+            <Text strong style={{ fontSize: 16, color: '#667eea' }}>{total}</Text>
+            <Text style={{ fontSize: 14, color: '#666' }}>篇新闻</Text>
+          </Space>
+        </div>
+
         <NewsList onTotalChange={setTotal} />
       </Content>
     </Layout>

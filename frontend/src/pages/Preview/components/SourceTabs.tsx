@@ -1,4 +1,4 @@
-import { Tabs } from 'antd';
+import { Segmented } from 'antd';
 import { useFilter } from '../context/FilterContext';
 
 interface SourceTabsProps {
@@ -8,21 +8,27 @@ interface SourceTabsProps {
 export default function SourceTabs({ sources }: SourceTabsProps) {
   const { filter, setFilter } = useFilter();
 
-  const tabs = [
-    { key: '', label: '全部' },
-    ...sources.map(source => ({ key: source, label: source }))
+  const options = [
+    { value: '', label: '全部' },
+    ...sources.map(source => ({ value: source, label: source }))
   ];
 
-  const handleChange = (key: string) => {
-    setFilter({ ...filter, source: key });
+  const handleChange = (value: string) => {
+    setFilter({ ...filter, source: value });
   };
 
   return (
-    <Tabs
-      activeKey={filter.source}
-      onChange={handleChange}
-      items={tabs}
-      style={{ marginBottom: 0 }}
-    />
+    <div style={{
+      overflowX: 'auto',
+      marginBottom: 8,
+    }}>
+      <div style={{ minWidth: 'max-content' }}>
+        <Segmented
+          value={filter.source}
+          onChange={handleChange}
+          options={options}
+        />
+      </div>
+    </div>
   );
 }

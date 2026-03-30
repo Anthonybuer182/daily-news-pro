@@ -23,8 +23,6 @@ export default function ArticleContent({
   tags,
   url
 }: ArticleContentProps) {
-  const isDarkMode = document.body.classList.contains('dark-mode')
-
   return (
     <article style={{
       maxWidth: 800,
@@ -38,7 +36,7 @@ export default function ArticleContent({
           fontSize: 36,
           fontWeight: 700,
           marginBottom: 16,
-          color: isDarkMode ? '#e8e8e8' : 'rgba(0,0,0,0.88)',
+          color: 'rgba(0,0,0,0.88)',
           lineHeight: 1.3
         }}
       >
@@ -51,12 +49,12 @@ export default function ArticleContent({
         alignItems: 'center',
         gap: 12,
         marginBottom: 20,
-        color: isDarkMode ? '#888' : '#666',
+        color: '#666',
         fontSize: 14
       }}>
         {author && (
           <span>
-            <Text strong style={{ color: isDarkMode ? '#aaa' : '#333' }}>作者</Text>
+            <Text strong style={{ color: '#333' }}>作者</Text>
             {' '}{author}
           </span>
         )}
@@ -78,10 +76,10 @@ export default function ArticleContent({
               style={{
                 display: 'inline-block',
                 padding: '4px 12px',
-                background: isDarkMode ? '#2d2d2d' : '#f0f0f0',
+                background: '#f0f0f0',
                 borderRadius: 16,
                 fontSize: 13,
-                color: isDarkMode ? '#e8e8e8' : '#333'
+                color: '#333'
               }}
             >
               {tag}
@@ -122,7 +120,7 @@ export default function ArticleContent({
         style={{
           lineHeight: 1.8,
           fontSize: 16,
-          color: isDarkMode ? '#d0d0d0' : '#333'
+          color: '#333'
         }}
       >
         <ReactMarkdown>{content}</ReactMarkdown>
@@ -163,7 +161,7 @@ export default function ArticleContent({
           margin: 1.5em 0;
         }
         .article-body pre {
-          background: ${isDarkMode ? '#1a1a1a' : '#f5f5f5'};
+          background: #f5f5f5;
           padding: 16px 20px;
           border-radius: 8px;
           overflow-x: auto;
@@ -174,15 +172,15 @@ export default function ArticleContent({
           font-size: 0.9em;
         }
         .article-body :not(pre) > code {
-          background: ${isDarkMode ? '#2d2d2d' : '#f0f0f0'};
+          background: #f0f0f0;
           padding: 2px 6px;
           border-radius: 4px;
         }
         .article-body blockquote {
-          border-left: 4px solid ${isDarkMode ? '#555' : '#ddd'};
+          border-left: 4px solid #ddd;
           padding-left: 20px;
           margin: 1.5em 0;
-          color: ${isDarkMode ? '#999' : '#666'};
+          color: #666;
           font-style: italic;
         }
         .article-body ul, .article-body ol {
@@ -201,7 +199,7 @@ export default function ArticleContent({
         }
         .article-body hr {
           border: none;
-          border-top: 1px solid ${isDarkMode ? '#333' : '#e8e8e8'};
+          border-top: 1px solid #e8e8e8;
           margin: 2em 0;
         }
         .article-body table {
@@ -210,12 +208,12 @@ export default function ArticleContent({
           margin: 1.5em 0;
         }
         .article-body th, .article-body td {
-          border: 1px solid ${isDarkMode ? '#333' : '#e8e8e8'};
+          border: 1px solid #e8e8e8;
           padding: 8px 12px;
           text-align: left;
         }
         .article-body th {
-          background: ${isDarkMode ? '#2d2d2d' : '#f5f5f5'};
+          background: #f5f5f5;
         }
       `}</style>
     </article>

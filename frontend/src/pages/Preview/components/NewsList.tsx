@@ -10,7 +10,6 @@ interface NewsListProps {
 export default function NewsList({ onTotalChange }: NewsListProps) {
   const { articles, loading, loadingMore, hasMore, loadMore, total } = useArticles();
   const observerRef = useRef<HTMLDivElement>(null);
-  const isDarkMode = document.body.classList.contains('dark-mode');
 
   useEffect(() => {
     onTotalChange(total);
@@ -53,7 +52,7 @@ export default function NewsList({ onTotalChange }: NewsListProps) {
       <div ref={observerRef} style={{ textAlign: 'center', padding: 20 }}>
         {loadingMore && <Spin />}
         {!hasMore && articles.length > 0 && (
-          <span style={{ color: isDarkMode ? '#666' : '#999' }}>没有更多了</span>
+          <span style={{ color: '#999' }}>没有更多了</span>
         )}
       </div>
     </div>

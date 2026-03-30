@@ -1,4 +1,4 @@
-import { Radio } from 'antd';
+import { Segmented } from 'antd';
 import { useFilter } from '../context/FilterContext';
 
 export default function TimeFilter() {
@@ -12,12 +12,10 @@ export default function TimeFilter() {
   ];
 
   return (
-    <Radio.Group
+    <Segmented
       value={filter.timeRange}
-      onChange={e => setFilter({ ...filter, timeRange: e.target.value })}
+      onChange={value => setFilter({ ...filter, timeRange: value as string })}
       options={options}
-      optionType="button"
-      buttonStyle="solid"
     />
   );
 }

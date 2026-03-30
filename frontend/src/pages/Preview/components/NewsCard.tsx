@@ -18,8 +18,6 @@ interface NewsCardProps {
 }
 
 export default function NewsCard({ article }: NewsCardProps) {
-  const isDarkMode = document.body.classList.contains('dark-mode')
-
   return (
     <Link to={`/preview/article/${article.id}`} style={{ display: 'block' }}>
       <Card
@@ -33,13 +31,13 @@ export default function NewsCard({ article }: NewsCardProps) {
         styles={{
           body: {
             padding: 0,
-            background: isDarkMode ? '#1f1f1f' : '#fff',
+            background: '#fff',
           }
         }}
         onMouseEnter={(e) => {
           const card = e.currentTarget as HTMLElement
           card.style.transform = 'translateY(-4px)'
-          card.style.boxShadow = isDarkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)'
+          card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'
         }}
         onMouseLeave={(e) => {
           const card = e.currentTarget as HTMLElement
@@ -59,11 +57,11 @@ export default function NewsCard({ article }: NewsCardProps) {
             <div style={{
               width: '100%',
               height: '100%',
-              background: isDarkMode ? '#2d2d2d' : '#f0f0f0',
+              background: '#f0f0f0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: isDarkMode ? '#666' : '#999'
+              color: '#999'
             }}>
               无封面图
             </div>
@@ -135,7 +133,7 @@ export default function NewsCard({ article }: NewsCardProps) {
             fontSize: 16,
             fontWeight: 700,
             marginBottom: 8,
-            color: isDarkMode ? '#e8e8e8' : 'rgba(0,0,0,0.88)',
+            color: 'rgba(0,0,0,0.88)',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -149,7 +147,7 @@ export default function NewsCard({ article }: NewsCardProps) {
           {article.summary && (
             <p style={{
               fontSize: 13,
-              color: isDarkMode ? '#888' : '#999',
+              color: '#999',
               marginBottom: 8,
               display: '-webkit-box',
               WebkitLineClamp: 2,
@@ -163,7 +161,7 @@ export default function NewsCard({ article }: NewsCardProps) {
 
           <span style={{
             fontSize: 12,
-            color: isDarkMode ? '#666' : '#aaa'
+            color: '#aaa'
           }}>
             {dayjs(article.created_at).fromNow()}
           </span>

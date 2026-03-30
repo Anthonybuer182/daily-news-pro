@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Button, Tooltip, Spin, message } from 'antd';
-import { ArrowLeftOutlined, BgColorsOutlined, LinkOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, LinkOutlined } from '@ant-design/icons';
 import { getArticle, getArticleMarkdown } from '../../api';
 import ArticleContent from './components/ArticleContent';
-import { useTheme } from './context/ThemeContext';
 
 const { Header, Content } = Layout;
 
@@ -14,7 +13,6 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState<any>(null);
   const [markdown, setMarkdown] = useState('');
   const [loading, setLoading] = useState(true);
-  const { isDarkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
     if (!id) return;
@@ -74,13 +72,14 @@ export default function ArticleDetail() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', background: isDarkMode ? '#141414' : '#fff' }}>
+    <Layout style={{ minHeight: '100vh', background: '#fff' }}>
       <Header style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: isDarkMode ? '#1f1f1f' : '#001529',
-        padding: '0 24px'
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '0 24px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <Button
@@ -93,14 +92,6 @@ export default function ArticleDetail() {
           </Button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Tooltip title="深色模式">
-            <Button
-              type="text"
-              icon={<BgColorsOutlined />}
-              onClick={toggleDarkMode}
-              style={{ color: '#fff' }}
-            />
-          </Tooltip>
           {article.url && (
             <Tooltip title="查看原文">
               <Button

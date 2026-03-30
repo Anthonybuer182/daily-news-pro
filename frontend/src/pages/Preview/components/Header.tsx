@@ -1,7 +1,6 @@
-import { Layout, Input, Button, Tooltip } from 'antd';
-import { BgColorsOutlined } from '@ant-design/icons';
+import { Layout, Input, Button } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext';
 
 const { Header: AntHeader } = Layout;
 
@@ -12,37 +11,29 @@ interface HeaderProps {
 }
 
 export default function Header({ keyword, onKeywordChange, onSearch }: HeaderProps) {
-  const { toggleDarkMode } = useTheme();
-
   return (
     <AntHeader style={{
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      background: '#001529',
-      padding: '0 24px'
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '0 32px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
     }}>
-      <Link to="/preview" style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
+      <Link to="/preview" style={{ color: '#fff', fontSize: 20, fontWeight: 'bold', letterSpacing: 1 }}>
         Daily News
       </Link>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Input
           placeholder="搜索新闻..."
           value={keyword}
           onChange={e => onKeywordChange(e.target.value)}
           onPressEnter={onSearch}
-          style={{ width: 200 }}
+          style={{ width: 240, borderRadius: 20 }}
           allowClear
+          prefix={<SearchOutlined style={{ color: '#999' }} />}
         />
-        <Tooltip title="深色模式">
-          <Button
-            type="text"
-            icon={<BgColorsOutlined />}
-            onClick={toggleDarkMode}
-            style={{ color: '#fff' }}
-          />
-        </Tooltip>
       </div>
     </AntHeader>
   );
