@@ -77,7 +77,7 @@ export default function ArticleDetail() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
         padding: '0 24px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
       }}>

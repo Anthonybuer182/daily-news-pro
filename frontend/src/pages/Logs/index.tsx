@@ -8,8 +8,8 @@ const { RangePicker } = DatePicker
 
 export default function Logs() {
   const [loading, setLoading] = useState(false)
-  const [logs, setLogs] = useState([])
-  const [jobs, setJobs] = useState([])
+  const [logs, setLogs] = useState<any[]>([])
+  const [jobs, setJobs] = useState<any[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 })
   const [searchForm] = Form.useForm()
@@ -59,11 +59,11 @@ export default function Logs() {
     }
   }
 
-  const handleTableChange = (pag: { current: number; pageSize: number }) => {
+  const handleTableChange = (pag: any) => {
     setPagination(prev => ({
       ...prev,
-      current: pag.current,
-      pageSize: pag.pageSize
+      current: pag.current || 1,
+      pageSize: pag.pageSize || 20
     }))
   }
 

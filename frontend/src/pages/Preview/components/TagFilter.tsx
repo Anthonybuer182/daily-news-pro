@@ -29,15 +29,15 @@ export default function TagFilter({ availableTags }: TagFilterProps) {
             onClick={() => toggleTag(tag)}
             style={{
               padding: '4px 12px',
-              border: isSelected ? '1px solid #667eea' : '1px solid #e8e8e8',
+              border: isSelected ? '1px solid #DC2626' : '1px solid #e8e8e8',
               borderRadius: 16,
               fontSize: 13,
               cursor: 'pointer',
               transition: 'all 0.2s',
               background: isSelected
-                ? 'linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%)'
+                ? 'linear-gradient(135deg, rgba(220,38,38,0.1) 0%, rgba(185,28,28,0.1) 100%)'
                 : '#fff',
-              color: isSelected ? '#667eea' : '#666',
+              color: isSelected ? '#DC2626' : '#666',
               fontWeight: isSelected ? 500 : 400,
             }}
           >

@@ -27,14 +27,29 @@ export default function Sidebar() {
   const location = useLocation()
 
   return (
-    <Sider width={200} style={{ background: '#fff' }}>
-      <div style={{ padding: '16px', fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}>
+    <Sider
+      width={220}
+      style={{
+        background: '#fff',
+        borderRight: '1px solid #f0f0f0',
+      }}
+    >
+      <div
+        style={{
+          padding: '20px 16px',
+          fontSize: '18px',
+          fontWeight: 700,
+          textAlign: 'center',
+          color: '#DC2626',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
         Daily News Pro
       </div>
       <Menu
         mode="inline"
         selectedKeys={[location.pathname]}
-        style={{ height: '100%', borderRight: 0 }}
+        style={{ height: '100%', borderRight: 0, padding: '12px 8px' }}
         items={menuItems}
         onClick={({ key }) => navigate(key)}
       />

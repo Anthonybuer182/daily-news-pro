@@ -48,22 +48,21 @@ function PreviewContent() {
         onKeywordChange={handleKeywordChange}
         onSearch={handleSearch}
       />
-      <Content style={{ padding: '24px 32px' }}>
+      <Content style={{ padding: '24px 32px', maxWidth: 1600, margin: '0 auto' }}>
         {/* 筛选栏 */}
         <div style={{
           background: '#fff',
-          borderRadius: 16,
+          borderRadius: 12,
           padding: '20px 24px',
           marginBottom: 20,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-          border: '1px solid rgba(0,0,0,0.04)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         }}>
           {/* 来源筛选 */}
           <div style={{ marginBottom: 16 }}>
             <SourceTabs sources={sources} />
           </div>
             <TagFilter availableTags={availableTags} />
-            <div style={{ height: 24 }} />
+            <div style={{ height: 16 }} />
             <TimeFilter />
         </div>
 
@@ -75,9 +74,9 @@ function PreviewContent() {
           marginBottom: 16
         }}>
           <Space>
-            <Text style={{ fontSize: 14, color: '#666' }}>共</Text>
-            <Text strong style={{ fontSize: 16, color: '#667eea' }}>{total}</Text>
-            <Text style={{ fontSize: 14, color: '#666' }}>篇新闻</Text>
+            <Text style={{ fontSize: 14, color: 'rgba(0,0,0,0.45)' }}>共</Text>
+            <Text strong style={{ fontSize: 16, color: '#DC2626' }}>{total}</Text>
+            <Text style={{ fontSize: 14, color: 'rgba(0,0,0,0.45)' }}>篇新闻</Text>
           </Space>
         </div>
 
