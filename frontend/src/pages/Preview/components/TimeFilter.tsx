@@ -14,7 +14,7 @@ export default function TimeFilter() {
   return (
     <Segmented
       value={filter.timeRange}
-      onChange={value => setFilter({ ...filter, timeRange: value as string })}
+      onChange={value => setFilter({ ...filter, timeRange: value as '' | 'today' | 'week' | 'month' })}
       options={options}
     />
   );
