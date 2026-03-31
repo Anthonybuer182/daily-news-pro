@@ -99,25 +99,32 @@ const DEFAULT_PLAYWRIGHT_CONFIG = {
   }
 }
 
-// 默认的 RSS 配置模板
+// 默认的 RSS 配置模板（合并到 extract_config）
 const DEFAULT_RSS_CONFIG = {
-  title: 'title',
-  link: 'link',
-  content: 'content:encoded',
-  description: 'description',
-  author: 'author',
-  date: 'pubDate'
+  mapping: {
+    title: 'title',
+    link: 'link',
+    content: 'content:encoded',
+    description: 'description',
+    author: 'author',
+    date: 'pubDate'
+  },
+  list: {
+    max_items: 10
+  }
 }
 
-// 默认的 API 配置模板
+// 默认的 API 配置模板（合并到 extract_config）
 const DEFAULT_API_CONFIG = {
-  items_path: 'data.items',
   mapping: {
     title: 'title',
     url: 'url',
     content: 'body',
     author: 'author.name',
     date: 'created_at'
+  },
+  list: {
+    max_items: 10
   }
 }
 
@@ -224,6 +231,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+
       // 处理翻译配置 - 选择目标语言即启用翻译
       if (translationFormData.target_lang) {
         const transConfig: any = {
@@ -357,13 +365,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       >
         <Input placeholder="https://example.com/feed.xml" />
       </Form.Item>
+
       <Form.Item
-        name="field_mapping"
-        label="字段映射"
-        tooltip={FIELD_TIPS.field_mapping}
+        name="extract_config"
+        label="抓取配置"
+        tooltip="包含字段映射和最大抓取数量配置"
       >
         <TextArea
-          rows={6}
+          rows={8}
           placeholder={JSON.stringify(DEFAULT_RSS_CONFIG, null, 2)}
           style={{ fontFamily: 'monospace' }}
         />
@@ -385,14 +394,15 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       >
         <Input placeholder="https://api.example.com/articles" />
       </Form.Item>
+
       <Form.Item
-        name="field_mapping"
-        label="字段映射"
-        tooltip={FIELD_TIPS.field_mapping}
+        name="extract_config"
+        label="抓取配置"
+        tooltip="包含字段映射和最大抓取数量配置"
       >
         <TextArea
-          rows={6}
-          placeholder={JSON.stringify(DEFAULT_API_CONFIG.mapping, null, 2)}
+          rows={8}
+          placeholder={JSON.stringify(DEFAULT_API_CONFIG, null, 2)}
           style={{ fontFamily: 'monospace' }}
         />
       </Form.Item>

@@ -182,10 +182,14 @@ class CrawlerEngine:
         return item.get(field)
 
     def _get_field_mapping(self) -> Dict:
-        """获取字段映射配置"""
+        """获取字段映射配置（从 extract_config.mapping 读取）"""
+        extract_config = self._get_extract_config()
+        mapping = extract_config.get("mapping", {})
+        if mapping:
+            return mapping
+        # 兼容旧配置：从 rule.field_mapping 读取
         if not self.rule.field_mapping:
             return {}
-
         try:
             return json.loads(self.rule.field_mapping)
         except:
@@ -475,6 +479,13 @@ class CrawlerEngine:
         if not isinstance(items, list):
             items = [items]
 
+        # 获取 max_items 限制
+        extract_config = self._get_extract_config()
+        max_items = extract_config.get("list", {}).get("max_items")
+        if max_items and len(items) > max_items:
+            items = items[:max_items]
+            self._log("info", f"Limited to {max_items} items")
+
         success_count = 0
         failed_count = 0
 
@@ -610,6 +621,14 @@ class CrawlerEngine:
 
         # 处理返回数据
         items = self._extract_items_from_response(data)
+
+        # 获取 max_items 限制
+        extract_config = self._get_extract_config()
+        max_items = extract_config.get("list", {}).get("max_items")
+        if max_items and len(items) > max_items:
+            items = items[:max_items]
+            self._log("info", f"Limited to {max_items} items")
+
         self._log("info", f"Extracted {len(items)} items, first item keys: {list(items[0].keys()) if items else 'none'}")
 
         success_count = 0
@@ -645,7 +664,7 @@ class CrawlerEngine:
 
         # 获取 max_items 限制
         extract_config = self._get_extract_config()
-        max_items = extract_config.get("max_items") or extract_config.get("list", {}).get("max_items")
+        max_items = extract_config.get("list", {}).get("max_items")
         if max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items (total available: {len(soup.find_all('item') or soup.find_all('entry'))})")
