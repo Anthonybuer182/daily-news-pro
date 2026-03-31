@@ -2052,19 +2052,20 @@ class CrawlerEngine:
         if content.get("image"):
             lines.append(f"![Cover]({content['image']})\n")
 
-        # 自动添加其他字段（如 language, stars, forks 等）
+        # 收集额外字段到同一行（如 Stars: 30.6k | Forks: 3.4k | Language: Python）
+        extra_fields = []
         for key, value in content.items():
             if key in special_fields or not value:
                 continue
-            # 跳过过长或 HTML 内容
             if isinstance(value, str) and len(value) > 200:
                 continue
-            # 跳过 content/text（会在后面单独处理）
             if key in ("content", "text"):
                 continue
-            # 格式化字段名：stars -> Stars, language -> Language
             field_name = key.replace("_", " ").title()
-            lines.append(f"**{field_name}**: {value}\n")
+            extra_fields.append(f"**{field_name}**: {value}")
+
+        if extra_fields:
+            lines.append(" | ".join(extra_fields) + "\n")
 
         lines.append("\n---\n\n")
 
