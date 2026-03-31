@@ -1258,8 +1258,19 @@ class CrawlerEngine:
         }
 
         # 获取原文内容用于翻译
-        if content.get("text") or content.get("content"):
-            article_data["content"] = content.get("text") or content.get("content", "")
+        # 如果有 text 字段直接用，否则如果有 content 字段且 format 是 text，先转换
+        if content.get("text"):
+            article_data["content"] = content.get("text")
+        elif content.get("content"):
+            # content 字段存在但可能是 HTML，检查 format
+            content_format = content.get("_content_format", "text")
+            if content_format == "text":
+                # format 是 text，需要把 HTML 转成纯文本
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(content.get("content"), 'html.parser')
+                article_data["content"] = soup.get_text(separator='\n', strip=True)
+            else:
+                article_data["content"] = content.get("content", "")
 
         self._log("info", f"Article data for translation: title_len={len(article_data['title'])}, summary_len={len(article_data['summary'])}, content_len={len(article_data.get('content', ''))}")
 
@@ -1337,8 +1348,19 @@ class CrawlerEngine:
             }
 
             # 获取原文内容用于翻译
-            if content.get("text") or content.get("content"):
-                article_data["content"] = content.get("text") or content.get("content", "")
+            # 如果有 text 字段直接用，否则如果有 content 字段且 format 是 text，先转换
+            if content.get("text"):
+                article_data["content"] = content.get("text")
+            elif content.get("content"):
+                # content 字段存在但可能是 HTML，检查 format
+                content_format = content.get("_content_format", "text")
+                if content_format == "text":
+                    # format 是 text，需要把 HTML 转成纯文本
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(content.get("content"), 'html.parser')
+                    article_data["content"] = soup.get_text(separator='\n', strip=True)
+                else:
+                    article_data["content"] = content.get("content", "")
 
             # 确定要翻译的字段
             fields_to_translate = []
@@ -1845,6 +1867,10 @@ class CrawlerEngine:
                     result[field_name] = SelectorParser.extract_text_css(html, selector)
                 elif extract_type == "html":
                     result[field_name] = SelectorParser.extract_html_css(html, selector)
+                    # 记录 HTML 内容的格式类型（markdown | html | text）
+                    # 默认 "text"：转换为纯文本用于翻译
+                    content_format = field_config.get("format", "text")
+                    result["_content_format"] = content_format
                 elif extract_type == "attribute":
                     result[field_name] = SelectorParser.extract_attribute_css(html, selector, attr)
             except Exception as e:
@@ -2037,8 +2063,8 @@ class CrawlerEngine:
 
         lines.append(f"**Source**: {url}\n")
 
-        # 已处理的特殊字段
-        special_fields = {"title", "author", "date", "image", "text", "content", "url"}
+        # 已处理的特殊字段（包括内部字段，以下划线开头）
+        special_fields = {"title", "author", "date", "image", "text", "content", "url", "_content_format"}
 
         # 添加 author
         if content.get("author"):
@@ -2069,15 +2095,37 @@ class CrawlerEngine:
 
         lines.append("\n---\n\n")
 
-        # 处理两种内容格式：trafilatura返回text，自定义配置返回content
+        # 根据配置处理内容格式
         text_content = content.get("text") or content.get("content")
         if text_content:
-            # 如果是原始HTML（从content获取），需要转换为纯文本
-            if content.get("content") and not content.get("text"):
-                # 使用BeautifulSoup提取纯文本
+            content_format = content.get("_content_format", "text")
+
+            if content_format == "markdown":
+                # HTML 转换为 markdown（保留图片、链接等）
+                try:
+                    import html2text
+                    h = html2text.HTML2Text()
+                    h.ignore_links = False
+                    h.ignore_images = False
+                    h.body_width = 0
+                    text_content = h.handle(text_content)
+                except ImportError:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(text_content, 'html.parser')
+                    text_content = soup.get_text(separator='\n', strip=True)
+            elif content_format == "html":
+                # 保持原始 HTML
+                pass  # 直接使用原始 HTML
+            elif content_format == "text":
+                # 转换为纯文本
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(text_content, 'html.parser')
                 text_content = soup.get_text(separator='\n', strip=True)
+            # else: 使用原始 text_content
+
+            # 转换相对路径为绝对路径
+            text_content = self._convert_relative_paths(text_content, url)
+
             lines.append(text_content)
 
         return "\n".join(lines)
@@ -2096,6 +2144,51 @@ class CrawlerEngine:
             f.write(content)
 
         return filepath
+
+    def _convert_relative_paths(self, text: str, url: str) -> str:
+        """将 markdown 中的相对路径转换为绝对路径"""
+        from urllib.parse import urljoin, urlparse
+        import posixpath
+        import re as regex
+
+        # 计算 base URL
+        parsed = urlparse(url)
+        path = parsed.path
+
+        # 判断 URL 是否像文件路径（以常见扩展名结尾）
+        is_file_path = bool(regex.search(r'\.[a-zA-Z0-9]+$', path))
+
+        if is_file_path:
+            # 如果 URL 像文件路径，去掉文件名
+            dir_path = posixpath.dirname(path)
+        else:
+            # 如果不是文件路径（如 GitHub 仓库），保留整个路径
+            dir_path = path
+
+        if dir_path and not dir_path.endswith('/'):
+            dir_path += '/'
+        base = f"{parsed.scheme}://{parsed.netloc}{dir_path}"
+
+        # 转换图片和链接
+        # ![image](path) -> ![image](absolute_url)
+        # [link](path) -> [link](absolute_url)
+        lines = []
+        for line in text.split('\n'):
+            # 处理图片 ![alt](url) - 负向先行确保不匹配已转换的
+            line = regex.sub(
+                r'!\[([^\]]*)\]\((?!http)([^\)]+)\)',
+                lambda m: f'![{m.group(1)}]({urljoin(base, m.group(2))})',
+                line
+            )
+            # 处理链接 [text](url)
+            line = regex.sub(
+                r'(?<!!)\[([^\]]*)\]\((?!http)([^\)]+)\)',
+                lambda m: f'[{m.group(1)}]({urljoin(base, m.group(2))})',
+                line
+            )
+            lines.append(line)
+
+        return '\n'.join(lines)
 
     def _filter_links(self, links: List[str], apply_detail_pattern: bool = True) -> List[str]:
         """Filter and deduplicate links"""
