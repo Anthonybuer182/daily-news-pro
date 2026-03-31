@@ -1200,7 +1200,7 @@ class CrawlerEngine:
                     article.cover_image = content.get("image")
 
                 # 生成 markdown 并保存
-                markdown_content = self._generate_markdown(content, url)
+                markdown_content = self._generate_markdown(content, url, article.title)
                 markdown_file = self._save_markdown(markdown_content, url)
 
                 article.markdown_file = markdown_file
@@ -1303,13 +1303,9 @@ class CrawlerEngine:
             article.summary = translated["summary"]
         if "content" in translated and translated["content"]:
             # 更新 markdown 文件中的内容
-            markdown_content = self._generate_markdown({
-                "title": article.title,
-                "text": translated["content"],
-                "author": content.get("author"),
-                "date": content.get("date"),
-                "image": content.get("image"),
-            }, article.url)
+            # 合并原始 content 和翻译后的 content，保持其他字段（如 language, stars, forks）
+            merged_content = {**content, "text": translated["content"]}
+            markdown_content = self._generate_markdown(merged_content, article.url, article.title)
             markdown_file = self._save_markdown(markdown_content, article.url)
             article.markdown_file = markdown_file
 
@@ -1378,13 +1374,9 @@ class CrawlerEngine:
                 article.summary = translated["summary"]
             if "content" in translated and translated["content"]:
                 # 更新 markdown 文件中的内容
-                markdown_content = self._generate_markdown({
-                    "title": article.title,
-                    "text": translated["content"],
-                    "author": content.get("author"),
-                    "date": content.get("date"),
-                    "image": content.get("image"),
-                }, article.url)
+                # 合并原始 content 和翻译后的 content，保持其他字段
+                merged_content = {**content, "text": translated["content"]}
+                markdown_content = self._generate_markdown(merged_content, article.url, article.title)
                 markdown_file = self._save_markdown(markdown_content, article.url)
                 article.markdown_file = markdown_file
 
@@ -2034,23 +2026,45 @@ class CrawlerEngine:
             self._log("error", f"Failed to extract GitHub repo {url}: {e}")
             return None
 
-    def _generate_markdown(self, content: Dict, url: str) -> str:
+    def _generate_markdown(self, content: Dict, url: str, title: str = None) -> str:
         """Generate Markdown from content"""
         lines = []
 
-        if content.get("title"):
-            lines.append(f"# {content['title']}\n")
+        # 使用传入的 title 或 content 中的 title
+        effective_title = title or content.get("title")
+        if effective_title:
+            lines.append(f"# {effective_title}\n")
 
         lines.append(f"**Source**: {url}\n")
 
+        # 已处理的特殊字段
+        special_fields = {"title", "author", "date", "image", "text", "content", "url"}
+
+        # 添加 author
         if content.get("author"):
             lines.append(f"**Author**: {content['author']}\n")
 
+        # 添加 date
         if content.get("date"):
             lines.append(f"**Date**: {content['date']}\n")
 
+        # 添加 image
         if content.get("image"):
             lines.append(f"![Cover]({content['image']})\n")
+
+        # 自动添加其他字段（如 language, stars, forks 等）
+        for key, value in content.items():
+            if key in special_fields or not value:
+                continue
+            # 跳过过长或 HTML 内容
+            if isinstance(value, str) and len(value) > 200:
+                continue
+            # 跳过 content/text（会在后面单独处理）
+            if key in ("content", "text"):
+                continue
+            # 格式化字段名：stars -> Stars, language -> Language
+            field_name = key.replace("_", " ").title()
+            lines.append(f"**{field_name}**: {value}\n")
 
         lines.append("\n---\n\n")
 
