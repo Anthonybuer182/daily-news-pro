@@ -631,6 +631,20 @@ class CrawlerEngine:
 
         self._log("info", f"Extracted {len(items)} items, first item keys: {list(items[0].keys()) if items else 'none'}")
 
+        # 检查是否需要使用浏览器抓取详情页（混合模式）
+        detail_config = extract_config.get("detail", {})
+        use_browser_detail = detail_config.get("render") == "browser"
+
+        if use_browser_detail:
+            # 混合模式：HTTP 列表 + Browser 详情
+            return await self._parse_json_with_browser_detail(items, extract_config)
+        else:
+            # 标准模式：直接从 API 响应提取内容
+            return await self._parse_json_standard(items, extract_config)
+
+    async def _parse_json_standard(self, items, extract_config: Dict) -> Dict:
+        """标准 JSON 解析 - 直接从 API 响应提取内容"""
+        field_mapping = self._get_field_mapping()
         success_count = 0
         failed_count = 0
 
@@ -651,6 +665,62 @@ class CrawlerEngine:
 
         return {"total": len(items), "success": success_count, "failed": failed_count}
 
+    async def _parse_json_with_browser_detail(self, items, extract_config: Dict) -> Dict:
+        """混合模式：HTTP 列表 + Browser 详情页抓取"""
+        field_mapping = self._get_field_mapping()
+        detail_config = extract_config.get("detail", {})
+
+        # 第一阶段：提取列表项并保存为 pending 状态
+        pending_urls = []
+        for item in items:
+            try:
+                # 提取字段
+                title_field = field_mapping.get("title", "title")
+                url_field = field_mapping.get("url", "url") or field_mapping.get("link", "link") or field_mapping.get("html_url", "html_url")
+                author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
+                date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at")
+                image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
+
+                title = self._get_nested_field(item, title_field)
+                url = self._get_nested_field(item, url_field)
+                author = self._get_nested_field(item, author_field)
+                date_str = self._get_nested_field(item, date_field)
+                image = self._get_nested_field(item, image_field)
+
+                if not url:
+                    continue
+
+                # 检查是否已存在
+                existing = self.db.query(Article).filter(Article.url == url).first()
+                if existing:
+                    self._log("info", f"Article already exists: {url}")
+                    continue
+
+                # 保存为 pending 状态（不生成 markdown）
+                article = Article(
+                    rule_id=self.rule.id,
+                    url=url,
+                    title=title,
+                    author=author,
+                    publish_time=self._parse_date(date_str) if date_str else None,
+                    cover_image=image,
+                    status="pending",
+                )
+                self.db.add(article)
+                pending_urls.append(url)
+
+            except Exception as e:
+                self._log("error", f"Failed to extract API item: {e}")
+
+        self.db.commit()
+        self._log("info", f"Saved {len(pending_urls)} pending articles for detail extraction")
+
+        # 第二阶段：使用浏览器抓取详情页
+        if pending_urls:
+            return await self._extract_pending_articles_browser(detail_config)
+
+        return {"total": len(items), "success": 0, "failed": 0}
+
     async def _parse_xml_response_text(self, text: str) -> Dict:
         """解析 XML/RSS 响应（文本版本）"""
         from bs4 import BeautifulSoup
@@ -669,6 +739,19 @@ class CrawlerEngine:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items (total available: {len(soup.find_all('item') or soup.find_all('entry'))})")
 
+        # 检查是否需要使用浏览器抓取详情页（混合模式）
+        detail_config = extract_config.get("detail", {})
+        use_browser_detail = detail_config.get("render") == "browser"
+
+        if use_browser_detail:
+            # 混合模式：HTTP 列表 + Browser 详情
+            return await self._parse_xml_with_browser_detail(items, extract_config)
+        else:
+            # 标准模式：直接从 RSS 提取内容
+            return await self._parse_xml_standard(items, extract_config)
+
+    async def _parse_xml_standard(self, items, extract_config: Dict) -> Dict:
+        """标准 XML 解析 - 直接从 RSS 提取内容"""
         field_mapping = self._get_field_mapping()
         success_count = 0
         failed_count = 0
@@ -689,6 +772,61 @@ class CrawlerEngine:
         self.job.failed_count = failed_count
 
         return {"total": len(items), "success": success_count, "failed": failed_count}
+
+    async def _parse_xml_with_browser_detail(self, items, extract_config: Dict) -> Dict:
+        """混合模式：HTTP 列表 + Browser 详情页抓取"""
+        from bs4 import BeautifulSoup
+
+        field_mapping = self._get_field_mapping()
+        detail_config = extract_config.get("detail", {})
+
+        # 第一阶段：提取列表项并保存为 pending 状态
+        pending_urls = []
+        for item in items:
+            try:
+                # 提取字段
+                title_field = field_mapping.get("title", "title")
+                link_field = field_mapping.get("link", "link")
+                author_field = field_mapping.get("author", "author")
+                date_field = field_mapping.get("date", "date") or field_mapping.get("pubDate", "pubDate")
+
+                title = self._get_rss_field(item, title_field)
+                url = self._get_rss_field(item, link_field)
+                author = self._get_rss_field(item, author_field)
+                date_str = self._get_rss_field(item, date_field)
+
+                if not url:
+                    continue
+
+                # 检查是否已存在
+                existing = self.db.query(Article).filter(Article.url == url).first()
+                if existing:
+                    self._log("info", f"Article already exists: {url}")
+                    continue
+
+                # 保存为 pending 状态（不生成 markdown）
+                article = Article(
+                    rule_id=self.rule.id,
+                    url=url,
+                    title=title,
+                    author=author,
+                    publish_time=self._parse_date(date_str) if date_str else None,
+                    status="pending",
+                )
+                self.db.add(article)
+                pending_urls.append(url)
+
+            except Exception as e:
+                self._log("error", f"Failed to extract RSS item: {e}")
+
+        self.db.commit()
+        self._log("info", f"Saved {len(pending_urls)} pending articles for detail extraction")
+
+        # 第二阶段：使用浏览器抓取详情页
+        if pending_urls:
+            return await self._extract_pending_articles_browser(detail_config)
+
+        return {"total": len(items), "success": 0, "failed": 0}
 
     async def _parse_markdown_response_text(self, text: str) -> Dict:
         """解析 Markdown 响应（文本版本）"""
@@ -825,7 +963,7 @@ class CrawlerEngine:
 
                 # 提取内容
                 if detail_config:
-                    content = self._extract_with_config(html, detail_config)
+                    content = await self._extract_with_config(html, detail_config)
                     if not content.get("text") and not content.get("content"):
                         content = TrafilaturaExtractor.extract_with_fallback(html)
                 else:
@@ -861,6 +999,106 @@ class CrawlerEngine:
                 article.error_message = str(e)
                 self.db.commit()
                 failed_count += 1
+
+        self.job.articles_count = len(pending_articles)
+        self.job.success_count = success_count
+        self.job.failed_count = failed_count
+
+        return {
+            "total": len(pending_articles),
+            "success": success_count,
+            "failed": failed_count,
+        }
+
+    async def _extract_pending_articles_browser(self, detail_config: Dict) -> Dict:
+        """使用 Playwright 浏览器抓取 pending 状态的详情页"""
+        from app.models import Article
+
+        # 防御性处理：确保 detail_config 是字典
+        if isinstance(detail_config, str):
+            try:
+                detail_config = json.loads(detail_config)
+            except:
+                detail_config = {}
+        elif not isinstance(detail_config, dict):
+            detail_config = {}
+
+        self._log("info", f"detail_config type: {type(detail_config)}, keys: {list(detail_config.keys()) if isinstance(detail_config, dict) else 'N/A'}")
+
+        pending_articles = self.db.query(Article).filter(
+            Article.rule_id == self.rule.id,
+            Article.status == "pending"
+        ).all()
+
+        if not pending_articles:
+            self._log("info", "No pending articles to fetch")
+            return {"total": 0, "success": 0, "failed": 0}
+
+        self._log("info", f"Fetching details for {len(pending_articles)} pending articles (browser mode)")
+
+        success_count = 0
+        failed_count = 0
+
+        async with PlaywrightCrawler(
+            user_agent=self.rule.user_agent,
+            delay_min=self.rule.delay_min,
+            delay_max=self.rule.delay_max,
+        ) as crawler:
+            for article in pending_articles:
+                try:
+                    url = article.url
+                    self._log("info", f"Fetching article detail: {article.title[:50] if article.title else url}...")
+
+                    # 使用 Playwright 抓取页面
+                    html = await crawler.fetch(url)
+
+                    if not html:
+                        article.status = "failed"
+                        article.error_message = "Empty response"
+                        failed_count += 1
+                        self.db.commit()
+                        continue
+
+                    # 提取内容
+                    if detail_config:
+                        content = await self._extract_with_config(html, detail_config)
+                        # 如果自定义提取没有返回正文内容，回退到 trafilatura
+                        if not content.get("text") and not content.get("content"):
+                            content = TrafilaturaExtractor.extract_with_fallback(html)
+                    else:
+                        content = TrafilaturaExtractor.extract_with_fallback(html)
+
+                    # 更新文章基本信息
+                    if not article.title and content.get("title"):
+                        article.title = content.get("title")
+                    if not article.summary and content.get("text"):
+                        article.summary = content.get("text")[:500]
+                    if not article.author and content.get("author"):
+                        article.author = content.get("author")
+                    if not article.publish_time and content.get("date"):
+                        article.publish_time = self._parse_date(content.get("date"))
+                    if not article.cover_image and content.get("image"):
+                        article.cover_image = content.get("image")
+
+                    # 生成 markdown 并保存
+                    markdown_content = self._generate_markdown(content, url, article.title)
+                    markdown_file = self._save_markdown(markdown_content, url)
+                    article.markdown_file = markdown_file
+                    article.status = "success"
+                    self.db.commit()
+
+                    # 翻译处理
+                    await self._translate_and_update_article(article, content)
+
+                    success_count += 1
+                    self._log("info", f"Extracted article: {article.title[:50] if article.title else url}")
+
+                except Exception as e:
+                    self._log("error", f"Failed to fetch {article.url}: {e}")
+                    article.status = "failed"
+                    article.error_message = str(e)
+                    self.db.commit()
+                    failed_count += 1
 
         self.job.articles_count = len(pending_articles)
         self.job.success_count = success_count
@@ -1870,8 +2108,9 @@ class CrawlerEngine:
         """Extract using new unified extract_config format"""
         result = {}
 
+        # 跳过非字典类型的配置项（如 render: "browser"）
         for field_name, field_config in detail_config.items():
-            if not field_config:
+            if not field_config or not isinstance(field_config, dict):
                 continue
 
             selector = field_config.get("selector")
