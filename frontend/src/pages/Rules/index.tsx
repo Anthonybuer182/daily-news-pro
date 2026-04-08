@@ -133,8 +133,16 @@ export default function Rules() {
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: '来源', dataIndex: 'source_url', key: 'source_url', ellipsis: true,
-      render: (v: string) => v ? <a href={v} target="_blank" rel="noopener noreferrer">{v}</a> : '-'
+    { title: '来源', key: 'source_url', ellipsis: true,
+      render: (_: any, record: any) => {
+        try {
+          const config = record.extract_config ? JSON.parse(record.extract_config) : {}
+          const url = config?.list?.url
+          return url ? <a href={url} target="_blank" rel="noopener noreferrer">{url}</a> : '-'
+        } catch {
+          return '-'
+        }
+      }
     },
     { title: '渲染方式', key: 'render',
       render: (_: any, record: any) => getRenderTag(record)

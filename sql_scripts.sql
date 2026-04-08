@@ -3,7 +3,6 @@ BEGIN TRANSACTION;
 CREATE TABLE rules (
 	id INTEGER NOT NULL,
 	name VARCHAR(255) NOT NULL,
-	source_url VARCHAR(500), 
 	field_mapping TEXT, 
 	extract_config TEXT, 
 	request_config TEXT, 

@@ -27,8 +27,6 @@ class RuleBase(BaseModel):
 • text：纯文本
 • 不设置：默认 html""")
 
-    source_url: Optional[str] = Field(default=None, description="要抓取的 URL，例如：'https://example.com/news'")
-
     # 通用配置字段 (JSON 格式) - 统一的 extract_config
     field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于API/RSS等场景，将原始数据字段映射到目标字段")
     extract_config: Optional[str] = Field(default=None, description="""提取配置，JSON格式。统一配置格式：

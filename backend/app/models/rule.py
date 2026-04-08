@@ -19,9 +19,6 @@ class Rule(Base):
     # 可选值: html, xml, json, markdown, text
     content_type = Column(String(20), nullable=True)
 
-    # 统一URL字段
-    source_url = Column(String(500))
-
     def get_render(self) -> str:
         """
         获取有效的渲染方式（自动推断逻辑）

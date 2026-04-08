@@ -50,10 +50,7 @@ def get_rules(
     query = db.query(Rule)
     if keyword:
         keyword_pattern = f"%{keyword}%"
-        query = query.filter(
-            (Rule.name.ilike(keyword_pattern)) |
-            (Rule.source_url.ilike(keyword_pattern))
-        )
+        query = query.filter(Rule.name.ilike(keyword_pattern))
     if status:
         query = query.filter(Rule.status == status)
 

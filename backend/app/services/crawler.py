@@ -268,7 +268,9 @@ class CrawlerEngine:
         import httpx
         import subprocess
 
-        url = self.rule.source_url
+        extract_config = self._get_extract_config()
+        list_config = extract_config.get("list", {})
+        url = list_config.get("url")
         if not url:
             raise ValueError("No source URL provided")
 
@@ -1132,7 +1134,7 @@ class CrawlerEngine:
         strategy_name = config.get("strategy", "auto")
 
         # 获取列表页 URL
-        list_url = list_config.get("url") or self.rule.source_url
+        list_url = list_config.get("url")
         if not list_url:
             raise ValueError("No list page URL provided")
 
@@ -1858,7 +1860,9 @@ class CrawlerEngine:
 
     async def _crawl_simple_playwright(self) -> Dict:
         """Simple single-level crawl for Playwright"""
-        url = self.rule.source_url
+        extract_config = self._get_extract_config()
+        list_config = extract_config.get("list", {})
+        url = list_config.get("url")
         if not url:
             raise ValueError("No URL to crawl")
 
