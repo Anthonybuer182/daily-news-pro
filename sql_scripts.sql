@@ -20,8 +20,6 @@ CREATE TABLE rules (
 	publish_time_selector VARCHAR(1000), 
 	cover_image_selector VARCHAR(1000), 
 	exclude_patterns TEXT, 
-	cookie_config TEXT, 
-	headers_config TEXT, 
 	auth_type VARCHAR(50), 
 	auth_config TEXT, 
 	proxy_config VARCHAR(500), 

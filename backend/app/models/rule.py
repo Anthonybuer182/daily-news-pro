@@ -105,8 +105,6 @@ class Rule(Base):
 
     # 通用配置
     exclude_patterns = Column(Text)
-    cookie_config = Column(Text)
-    headers_config = Column(Text)
     auth_type = Column(String(50), default="none")
     auth_config = Column(Text)
     proxy_config = Column(String(500))

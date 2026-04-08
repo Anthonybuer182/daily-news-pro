@@ -163,9 +163,7 @@ class RuleBase(BaseModel):
 
     # 通用配置
     exclude_patterns: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.exclude")
-    cookie_config: Optional[str] = Field(default=None, description="Cookie配置，JSON格式。用于需要登录认证的网站，例如：{'name': 'session', 'value': 'xxx'}")
-    headers_config: Optional[str] = Field(default=None, description="自定义请求头，JSON格式。例如：{'Referer': 'https://example.com', 'Accept-Language': 'en-US'}")
-    auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、cookie(Cookie认证)")
+    auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、custom(自定义请求头)")
     auth_config: Optional[str] = Field(default=None, description="""认证配置，JSON格式。根据auth_type配置用户名密码或Token等。
 
 【Bearer Token 示例】
@@ -174,8 +172,8 @@ class RuleBase(BaseModel):
 【Basic Auth 示例】
 {"type": "basic", "username": "user", "password": "pass"}
 
-【Cookie 认证示例】
-{"type": "cookie", "name": "session", "value": "xxx"}""")
+【自定义请求头示例】
+{"type": "custom", "headers": {"Authorization": "Bearer xxx", "Cookie": "name=value", "Referer": "https://example.com"}}""")
     proxy_config: Optional[str] = Field(default=None, description="""代理配置，JSON格式。
 
 【示例 - 无认证代理】

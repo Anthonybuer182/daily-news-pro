@@ -20,16 +20,118 @@ const FIELD_TIPS = {
 
   extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• attr：链接属性，默认 href\n• type：提取类型，attribute（默认，从属性提取）或 text（从文本提取）\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
   field_mapping: '字段映射配置（JSON格式）：\n将源数据的字段名映射到标准文章字段\n\n标准字段：title, link, content, description, author, date\n例如：{ "title": "article_title", "author": "writer.name" }',
-  headers_config: '自定义HTTP请求头（JSON格式）\n\n例如：{"Referer": "https://example.com", "Accept-Language": "en-US"}\n可用于绕过简单的反爬机制',
   delay_min: '抓取请求之间的最小等待时间（秒）\n\n设置延迟防止请求过快被封，例如设为1表示每次请求后至少等待1秒',
   delay_max: '抓取请求之间的最大等待时间（秒）\n\n与min配合使用，随机等待min~max秒。例如1-3秒表示每次等待1-3秒',
   user_agent: '自定义User-Agent字符串\n\n不设置则使用浏览器默认UA。可用于伪装成特定浏览器或移动端',
   cron_expression: 'Cron定时表达式，定义自动抓取计划\n\n格式：分 时 日 月 周\n• 0 8 * * *：每天早上8点\n• */30 * * * *：每30分钟\n• 0 * * * *：每小时\n• 0 0 * * 0：每周日午夜',
   status: '规则状态：\n• disabled：禁用，不执行定时任务\n• enabled：启用，按cron_expression定时执行',
   proxy_config: '代理服务器配置（JSON格式）\n\n格式：{"server": "http://proxy:8080", "username": "user", "password": "pass"}\n用于需要代理访问的网站',
-  cookie_config: 'Cookie认证配置（JSON格式）\n\n格式：{"name": "session_id", "value": "xxx"}\n用于需要登录才能访问的内容',
-  auth_type: '认证类型：\n• none：无认证\n• basic：HTTP Basic认证\n• bearer：Bearer Token认证\n• cookie：Cookie认证',
-  auth_config: '认证凭据配置（JSON格式）\n\n根据auth_type配置：\n• basic：{"username": "user", "password": "pass"}\n• bearer：{"token": "xxx"}\n• cookie：{"name": "session", "value": "xxx"}',
+}
+
+// 认证配置表单组件
+interface AuthConfigFormProps {
+  authType: string
+  value?: any
+  onChange?: (value: any) => void
+}
+
+const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChange }) => {
+  const updateValue = (newValue: any) => {
+    onChange?.(newValue)
+  }
+
+  if (authType === 'none') {
+    return <Text type="secondary">无需认证配置</Text>
+  }
+
+  if (authType === 'basic') {
+    return (
+      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        <Input
+          placeholder="用户名"
+          value={value?.username || ''}
+          onChange={(e) => updateValue({ ...value, username: e.target.value })}
+          style={{ width: 200 }}
+        />
+        <Input.Password
+          placeholder="密码"
+          value={value?.password || ''}
+          onChange={(e) => updateValue({ ...value, password: e.target.value })}
+          style={{ width: 200 }}
+        />
+      </Space>
+    )
+  }
+
+  if (authType === 'bearer') {
+    return (
+      <Input
+        placeholder="Token"
+        value={value?.token || ''}
+        onChange={(e) => updateValue({ token: e.target.value })}
+        style={{ width: 300 }}
+      />
+    )
+  }
+
+  if (authType === 'custom') {
+    const headersObj: Record<string, string> = value?.headers || {}
+
+    const updateHeaderValue = (key: string, val: string) => {
+      const newHeaders = { ...headersObj }
+      if (val) {
+        newHeaders[key] = val
+      } else {
+        delete newHeaders[key]
+      }
+      updateValue({ ...value, headers: newHeaders })
+    }
+
+    const addHeader = () => {
+      const newKey = `header_${Date.now()}`
+      updateValue({
+        ...value,
+        headers: { ...headersObj, [newKey]: '' }
+      })
+    }
+
+    const removeHeader = (key: string) => {
+      const newHeaders = { ...headersObj }
+      delete newHeaders[key]
+      updateValue({ ...value, headers: newHeaders })
+    }
+
+    return (
+      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        {Object.entries(headersObj).map(([key, val]) => (
+          <Space key={key}>
+            <Input
+              placeholder="Key"
+              value={key}
+              onChange={(e) => {
+                const newHeaders: Record<string, string> = {}
+                Object.entries(headersObj).forEach(([k, v]) => {
+                  newHeaders[k === key ? e.target.value : k] = v
+                })
+                updateValue({ ...value, headers: newHeaders })
+              }}
+              style={{ width: 180 }}
+            />
+            <Input
+              placeholder="Value"
+              value={val}
+              onChange={(e) => updateHeaderValue(key, e.target.value)}
+              style={{ width: 250 }}
+            />
+            <Button type="text" danger onClick={() => removeHeader(key)}>删除</Button>
+          </Space>
+        ))}
+        <Button type="dashed" onClick={addHeader}>+ 添加请求头</Button>
+      </Space>
+    )
+  }
+
+  return null
 }
 
 // 内容类型选项
@@ -139,6 +241,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const [loading, setLoading] = useState(false)
   const [render, setRender] = useState<string>('browser')
   const [contentType, setContentType] = useState<string>('html')
+  const [authType, setAuthType] = useState<string>('none')
+  const [authConfigValue, setAuthConfigValue] = useState<any>(null)
   const [translationFormData, setTranslationFormData] = useState({
     target_lang: 'zh',
     source_lang: '',
@@ -158,6 +262,25 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       form.setFieldsValue(rule)
       setRender(rule.render || 'browser')
       setContentType(rule.content_type || 'html')
+      setAuthType(rule.auth_type || 'none')
+      // 初始化认证配置
+      if (rule.auth_config) {
+        try {
+          const config = typeof rule.auth_config === 'string'
+            ? JSON.parse(rule.auth_config)
+            : rule.auth_config
+          if (rule.auth_type === 'custom' && config?.headers && typeof config.headers === 'object') {
+            const headersArray = Object.entries(config.headers).map(([key, value]) => ({ key, value: value as string }))
+            setAuthConfigValue({ ...config, headers: headersArray })
+          } else {
+            setAuthConfigValue(config)
+          }
+        } catch {
+          setAuthConfigValue(null)
+        }
+      } else {
+        setAuthConfigValue(null)
+      }
       // 初始化翻译配置
       if (rule.translation_config) {
         try {
@@ -365,17 +488,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           style={{ fontFamily: 'monospace' }}
         />
       </Form.Item>
-      <Form.Item
-        name="headers_config"
-        label="请求头"
-        tooltip={FIELD_TIPS.headers_config}
-      >
-        <TextArea
-          rows={2}
-          placeholder='{"Authorization": "Bearer token"}'
-          style={{ fontFamily: 'monospace' }}
-        />
-      </Form.Item>
       <Button type="link" onClick={() => fillDefaultConfig('json')}>
         填充默认配置
       </Button>
@@ -506,41 +618,28 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         </Form.Item>
 
         <Form.Item
-          name="cookie_config"
-          label="Cookie配置"
-          tooltip={FIELD_TIPS.cookie_config}
-        >
-          <TextArea
-            rows={2}
-            placeholder='{"name": "session_id", "value": "xxx"}'
-            style={{ fontFamily: 'monospace' }}
-          />
-        </Form.Item>
-
-        <Form.Item
           name="auth_type"
           label="认证类型"
-          tooltip={FIELD_TIPS.auth_type}
         >
           <Select
+            onChange={(value) => setAuthType(value)}
             options={[
               { label: '无认证', value: 'none' },
               { label: 'Basic认证', value: 'basic' },
               { label: 'Bearer Token', value: 'bearer' },
-              { label: 'Cookie认证', value: 'cookie' },
+              { label: '自定义', value: 'custom' },
             ]}
           />
         </Form.Item>
 
-        <Form.Item
-          name="auth_config"
-          label="认证配置"
-          tooltip={FIELD_TIPS.auth_config}
-        >
-          <TextArea
-            rows={2}
-            placeholder='{"username": "user", "password": "pass"}'
-            style={{ fontFamily: 'monospace' }}
+        <Form.Item label="认证配置">
+          <AuthConfigForm
+            authType={authType}
+            value={authConfigValue}
+            onChange={(val) => {
+              setAuthConfigValue(val)
+              form.setFieldValue('auth_config', val ? JSON.stringify(val) : undefined)
+            }}
           />
         </Form.Item>
 

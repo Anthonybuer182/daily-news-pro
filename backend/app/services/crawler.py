@@ -235,16 +235,6 @@ class CrawlerEngine:
         except:
             return None
 
-    def _get_cookie_config(self) -> Optional[Dict]:
-        """获取 Cookie 配置"""
-        if not self.rule.cookie_config:
-            return None
-
-        try:
-            return json.loads(self.rule.cookie_config)
-        except:
-            return None
-
     def _get_translation_config(self) -> Optional[Dict]:
         """获取翻译配置"""
         if not self.rule.translation_config:
@@ -280,11 +270,6 @@ class CrawlerEngine:
         try:
             # 获取请求配置
             headers = {}
-            if self.rule.headers_config:
-                try:
-                    headers = json.loads(self.rule.headers_config)
-                except:
-                    pass
             if self.rule.user_agent:
                 headers["User-Agent"] = self.rule.user_agent
 
@@ -332,11 +317,6 @@ class CrawlerEngine:
                 auth_config = self._get_auth_config()
                 kwargs = RequestConfigManager.apply_auth(kwargs, auth_type, auth_config)
 
-            # 应用 Cookie
-            cookie_config = self._get_cookie_config()
-            if cookie_config:
-                kwargs = RequestConfigManager.apply_cookies(kwargs, cookie_config)
-
             # 获取代理配置
             proxy_config = self._get_proxy_config()
             proxy = RequestConfigManager.apply_proxy(proxy_config)
@@ -345,8 +325,6 @@ class CrawlerEngine:
             unused_fields = []
             if self.rule.auth_config and not request_config:
                 unused_fields.extend(["auth_config"])
-            if self.rule.cookie_config and not request_config:
-                unused_fields.extend(["cookie_config"])
             if self.rule.proxy_config and not request_config:
                 unused_fields.extend(["proxy_config"])
 

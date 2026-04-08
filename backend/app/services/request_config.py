@@ -78,7 +78,7 @@ class RequestConfigManager:
 
         Args:
             kwargs: 请求参数字典
-            auth_type: 认证类型 (bearer/basic/cookie)
+            auth_type: 认证类型 (bearer/basic/custom)
             auth_config: 认证配置
 
         Returns:
@@ -102,12 +102,13 @@ class RequestConfigManager:
                 credentials = f"{username}:{password}"
                 encoded = base64.b64encode(credentials.encode()).decode()
                 headers["Authorization"] = f"Basic {encoded}"
-        elif auth_type == "cookie":
-            # Cookie 认证
-            cookie_name = auth_config.get("name", "")
-            cookie_value = auth_config.get("value", "")
-            if cookie_name and cookie_value:
-                headers["Cookie"] = f"{cookie_name}={cookie_value}"
+        elif auth_type == "custom":
+            # 自定义请求头（支持多个）
+            custom_headers = auth_config.get("headers", {})
+            if isinstance(custom_headers, dict):
+                for header_name, header_value in custom_headers.items():
+                    if header_name and header_value:
+                        headers[header_name] = header_value
 
         kwargs["headers"] = headers
         return kwargs
@@ -139,40 +140,6 @@ class RequestConfigManager:
             proxy["password"] = password
 
         return proxy
-
-    @classmethod
-    def apply_cookies(
-        cls,
-        kwargs: dict,
-        cookie_config: Optional[dict]
-    ) -> dict:
-        """
-        应用 Cookie 配置
-
-        Args:
-            kwargs: 请求参数字典
-            cookie_config: Cookie 配置
-
-        Returns:
-            dict: 更新后的请求参数
-        """
-        if not cookie_config:
-            return kwargs
-
-        headers = kwargs.get("headers", {})
-
-        # 支持多种 cookie 配置格式
-        if isinstance(cookie_config, dict):
-            name = cookie_config.get("name", "")
-            value = cookie_config.get("value", "")
-            if name and value:
-                headers["Cookie"] = f"{name}={value}"
-        elif isinstance(cookie_config, str):
-            # 字符串格式直接使用
-            headers["Cookie"] = cookie_config
-
-        kwargs["headers"] = headers
-        return kwargs
 
     @classmethod
     def get_unused_config_warning(cls, rule_name: str, fields: list) -> Optional[str]:
