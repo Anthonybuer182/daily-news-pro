@@ -2162,10 +2162,9 @@ class CrawlerEngine:
         """Extract article links using new unified config format"""
         selector = list_config.get("selector", "a")
         attr = list_config.get("attr", "href")
+        extract_type = list_config.get("type", "attribute")
 
-        links = SelectorParser.extract_links_css(html, selector, base_url)
-
-        if attr != "href":
+        if extract_type == "attribute":
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, 'lxml')
             links = []
@@ -2175,8 +2174,9 @@ class CrawlerEngine:
                     from urllib.parse import urljoin
                     full_url = urljoin(base_url, attr_value)
                     links.append(full_url)
-
-        return list(set(links))
+            return list(set(links))
+        else:
+            return []
 
     def _extract_list_items_with_config(self, html: str, list_config: Dict, base_url: str) -> List[Dict]:
         """Extract list items with basic info (title, summary, etc.)"""
