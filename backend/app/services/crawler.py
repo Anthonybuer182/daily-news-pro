@@ -2161,20 +2161,17 @@ class CrawlerEngine:
     def _extract_links_with_config(self, html: str, list_config: Dict, base_url: str) -> List[str]:
         """Extract article links using new unified config format"""
         selector = list_config.get("selector", "a")
-        link_attr = list_config.get("link_attr", "href")
+        attr = list_config.get("attr", "href")
 
-        # Use CSS selector to extract links
         links = SelectorParser.extract_links_css(html, selector, base_url)
 
-        # If link_attr is not href, we need to handle it differently
-        if link_attr != "href":
+        if attr != "href":
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, 'lxml')
             links = []
             for element in soup.select(selector):
-                attr_value = element.get(link_attr)
+                attr_value = element.get(attr)
                 if attr_value:
-                    # Handle relative URLs
                     from urllib.parse import urljoin
                     full_url = urljoin(base_url, attr_value)
                     links.append(full_url)

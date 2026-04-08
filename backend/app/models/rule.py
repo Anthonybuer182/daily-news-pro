@@ -60,7 +60,7 @@ class Rule(Base):
     #   "list": {
     #     "url": "https://example.com/news",  # 列表页URL
     #     "selector": ".article-list a",      # 文章链接选择器
-    #     "link_attr": "href",                # 链接属性 (默认 href)
+    #     "attr": "href",                # 链接属性 (默认 href)
     #     "pagination": {                     # 分页配置 (可选)
     #       "type": "next-button",           # next-button, infinite-scroll, page-param
     #       "selector": ".next-page",        # 下一页按钮选择器

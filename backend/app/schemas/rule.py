@@ -35,6 +35,7 @@ class RuleBase(BaseModel):
 {
   "list": {
     "selector": "CSS选择器",
+    "attr": "href",              // 链接属性，用于提取详情页URL
     "xpath": "XPath表达式",
     "regex": "正则表达式",
     "fields": {

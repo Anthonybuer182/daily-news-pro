@@ -18,7 +18,7 @@ const FIELD_TIPS = {
   render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面\n\n💡 不设置时自动推断：\n• content_type 为 xml/json/markdown/text → http\n• content_type 为 html 或未设置 → browser',
   content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本\n\n💡 不设置时默认 html',
 
-  extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• link_attr：链接属性，默认 href\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
+  extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• attr：链接属性，默认 href\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
   field_mapping: '字段映射配置（JSON格式）：\n将源数据的字段名映射到标准文章字段\n\n标准字段：title, link, content, description, author, date\n例如：{ "title": "article_title", "author": "writer.name" }',
   headers_config: '自定义HTTP请求头（JSON格式）\n\n例如：{"Referer": "https://example.com", "Accept-Language": "en-US"}\n可用于绕过简单的反爬机制',
   delay_min: '抓取请求之间的最小等待时间（秒）\n\n设置延迟防止请求过快被封，例如设为1表示每次请求后至少等待1秒',
@@ -76,9 +76,9 @@ const TRANSLATION_FIELD_OPTIONS = [
 const DEFAULT_PLAYWRIGHT_CONFIG = {
   list: {
     url: '',
-    selector: '.article-item',  // 列表中每个文章的容器选择器
-    link_attr: 'href',
-    max_items: 3,  // 默认抓取前3条，可设置为更大值或移除以抓取全部
+    selector: '.article-item',
+    attr: 'href',
+    max_items: 3,
     // URL 过滤配置
     url_filters: {
       include: '',  // 正则表达式，只有匹配的链接才会被抓取
