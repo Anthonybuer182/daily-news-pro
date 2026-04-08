@@ -42,12 +42,21 @@ class RuleBase(BaseModel):
       "title": {"op": "css", "selector": "h2", "type": "text"}
     },
     "max_items": 10,
+    "url_filters": {
+      "include": "正则表达式",     // 白名单：必须匹配才抓取
+      "exclude": ["字符串1", "字符串2"]  // 黑名单：包含这些字符串的不抓取
+    },
     "pagination": {...}
   },
   "detail": {
     "fields": {...}
   }
 }
+
+【URL过滤配置 (url_filters)】
+在 list.url_filters 中配置链接过滤规则：
+- include: 正则表达式，只有匹配该正则的链接才会被抓取
+- exclude: 字符串数组，包含任意一个字符串的链接会被排除
 
 【支持的提取操作 (op)】
 • css：CSS选择器提取
@@ -63,6 +72,10 @@ class RuleBase(BaseModel):
 {
   "list": {
     "selector": "article.item",
+    "url_filters": {
+      "include": "https://example\\.com/article/\\d+",
+      "exclude": ["/tag/", "/category/", "/sponsored/"]
+    },
     "fields": {
       "title": {"op": "css", "selector": "h2", "type": "text"},
       "url": {"op": "css", "selector": "a", "attr": "href"},
@@ -133,7 +146,7 @@ class RuleBase(BaseModel):
     list_selector_type: str = Field(default="css", description="列表选择器类型：css(CSS选择器) 或 xpath(XPath表达式)")
     list_selector: Optional[str] = Field(default=None, description="文章列表的CSS/XPath选择器，例如：'div.article-list a' 或 '//div[@class=\"article\"]/a'")
     list_item_selector: Optional[str] = Field(default=None, description="列表中每个文章项的选择器，用于精确定位文章链接元素")
-    detail_url_pattern: Optional[str] = Field(default=None, description="文章URL正则表达式，用于过滤有效文章链接。例如：'https://example.com/article/\\d+' 只匹配符合条件的URL")
+    detail_url_pattern: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.include")
 
     # Playwright 专用：内容选择器
     title_selector_type: str = Field(default="css", description="标题选择器类型：css 或 xpath")
@@ -147,7 +160,7 @@ class RuleBase(BaseModel):
     cover_image_selector: Optional[str] = Field(default=None, description="封面图片选择器，例如：'img.article-cover'。支持从src或data-src属性获取图片URL")
 
     # 通用配置
-    exclude_patterns: Optional[str] = Field(default=None, description="排除URL正则表达式，多个用逗号分隔。例如：'\\/category\\/ads,\\/tag\\/sponsored' 排除广告和赞助内容")
+    exclude_patterns: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.exclude")
     cookie_config: Optional[str] = Field(default=None, description="Cookie配置，JSON格式。用于需要登录认证的网站，例如：{'name': 'session', 'value': 'xxx'}")
     headers_config: Optional[str] = Field(default=None, description="自定义请求头，JSON格式。例如：{'Referer': 'https://example.com', 'Accept-Language': 'en-US'}")
     auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、cookie(Cookie认证)")

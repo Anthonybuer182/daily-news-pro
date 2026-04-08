@@ -18,10 +18,8 @@ const FIELD_TIPS = {
   render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面\n\n💡 不设置时自动推断：\n• content_type 为 xml/json/markdown/text → http\n• content_type 为 html 或未设置 → browser',
   content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本\n\n💡 不设置时默认 html',
 
-  detail_url_pattern: '正则表达式，用于过滤有效的文章链接。\n例如：https://example.com/article/\\d+ 会只匹配形如 /article/123 的URL\n用于排除分页、标签页等非文章链接',
-  extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• link_attr：链接属性，默认 href\n• max_items：最大抓取数量，默认3条\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存',
+  extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• link_attr：链接属性，默认 href\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
   field_mapping: '字段映射配置（JSON格式）：\n将源数据的字段名映射到标准文章字段\n\n标准字段：title, link, content, description, author, date\n例如：{ "title": "article_title", "author": "writer.name" }',
-  exclude_patterns: '排除的URL正则表达式，多个用逗号分隔\n\n例如：["/tag/sponsored", "/category/ads", "/page/\\d+"]\n会排除所有包含 /tag/sponsored、/category/ads 或分页链接的URL',
   headers_config: '自定义HTTP请求头（JSON格式）\n\n例如：{"Referer": "https://example.com", "Accept-Language": "en-US"}\n可用于绕过简单的反爬机制',
   delay_min: '抓取请求之间的最小等待时间（秒）\n\n设置延迟防止请求过快被封，例如设为1表示每次请求后至少等待1秒',
   delay_max: '抓取请求之间的最大等待时间（秒）\n\n与min配合使用，随机等待min~max秒。例如1-3秒表示每次等待1-3秒',
@@ -81,6 +79,11 @@ const DEFAULT_PLAYWRIGHT_CONFIG = {
     selector: '.article-item',  // 列表中每个文章的容器选择器
     link_attr: 'href',
     max_items: 3,  // 默认抓取前3条，可设置为更大值或移除以抓取全部
+    // URL 过滤配置
+    url_filters: {
+      include: '',  // 正则表达式，只有匹配的链接才会被抓取
+      exclude: []   // 字符串数组，包含这些字符串的链接会被排除
+    },
     // 列表中每个item的基本信息提取配置
     item_fields: {
       title: { selector: '.title, h3', type: 'text' },
@@ -308,14 +311,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const renderHtmlFields = () => (
     <>
       <Form.Item
-        name="detail_url_pattern"
-        label="详情页 URL 匹配 (正则)"
-        tooltip={FIELD_TIPS.detail_url_pattern}
-      >
-        <Input placeholder="如: https://example.com/article/.*" />
-      </Form.Item>
-
-      <Form.Item
         name="extract_config"
         label="抓取配置 (JSON)"
         tooltip={FIELD_TIPS.extract_config}
@@ -332,19 +327,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           填充默认配置
         </Button>
       </Space>
-
-      <Form.Item
-        name="exclude_patterns"
-        label="排除 URL 模式"
-        tooltip={FIELD_TIPS.exclude_patterns}
-        style={{ marginTop: 16 }}
-      >
-        <TextArea
-          rows={2}
-          placeholder='["/tag/", "/category/"]'
-          style={{ fontFamily: 'monospace' }}
-        />
-      </Form.Item>
     </>
   )
 

@@ -1284,34 +1284,51 @@ class CrawlerEngine:
 
         return all_items
 
+    def _get_url_filters(self) -> Dict:
+        """获取 URL 过滤配置，优先从 extract_config.list.url_filters 读取，兼容旧字段"""
+        url_filters = {"include": None, "exclude": []}
+
+        extract_config = self._get_extract_config()
+        list_config = extract_config.get("list", {})
+
+        if "url_filters" in list_config:
+            filters = list_config["url_filters"]
+            url_filters["include"] = filters.get("include")
+            url_filters["exclude"] = filters.get("exclude", [])
+        else:
+            url_filters["include"] = self.rule.detail_url_pattern
+            exclude_patterns = self.rule.exclude_patterns
+            if exclude_patterns:
+                try:
+                    url_filters["exclude"] = json.loads(exclude_patterns)
+                except:
+                    url_filters["exclude"] = []
+            else:
+                url_filters["exclude"] = []
+
+        return url_filters
+
     def _filter_list_items(self, items: List[Dict]) -> List[Dict]:
-        """过滤列表项 - 排除模式和增量更新"""
+        """过滤列表项 - url_filters 过滤和增量更新"""
         import re
 
         filtered = []
-        exclude_patterns = []
-        if self.rule.exclude_patterns:
-            try:
-                exclude_patterns = json.loads(self.rule.exclude_patterns)
-            except:
-                pass
-
-        detail_url_pattern = self.rule.detail_url_pattern
+        url_filters = self._get_url_filters()
+        include_pattern = url_filters.get("include")
+        exclude_patterns = url_filters.get("exclude", [])
 
         for item in items:
             url = item.get('url', '')
             if not url:
                 continue
 
-            # URL 模式过滤
-            if detail_url_pattern:
+            if include_pattern:
                 try:
-                    if not re.match(detail_url_pattern, url):
+                    if not re.match(include_pattern, url):
                         continue
                 except re.error:
                     pass
 
-            # 排除模式过滤
             skip = False
             for pattern in exclude_patterns:
                 if pattern.replace("*", "") in url:
@@ -2456,36 +2473,24 @@ class CrawlerEngine:
         """Filter and deduplicate links"""
         import re
 
-        # Remove duplicates while preserving order
         seen = set()
         filtered = []
 
-        # Get exclude patterns
-        exclude_patterns = []
-        if self.rule.exclude_patterns:
-            import json
-            try:
-                exclude_patterns = json.loads(self.rule.exclude_patterns)
-            except:
-                pass
-
-        # Get detail URL pattern for positive matching
-        detail_url_pattern = self.rule.detail_url_pattern
+        url_filters = self._get_url_filters()
+        include_pattern = url_filters.get("include") if apply_detail_pattern else None
+        exclude_patterns = url_filters.get("exclude", [])
 
         for link in links:
-            # Skip duplicates
             if link in seen:
                 continue
 
-            # Check detail URL pattern (positive filter)
-            if apply_detail_pattern and detail_url_pattern:
+            if include_pattern:
                 try:
-                    if not re.match(detail_url_pattern, link):
+                    if not re.match(include_pattern, link):
                         continue
                 except re.error:
-                    pass  # If regex is invalid, skip this filter
+                    pass
 
-            # Check exclude patterns (negative filter)
             skip = False
             for pattern in exclude_patterns:
                 if pattern.replace("*", "") in link:
