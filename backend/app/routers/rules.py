@@ -103,7 +103,7 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/batch-delete")
-def batch_delete_rules(ids: List[int], db: Session = Depends(get_db)):
+def batch_delete_rules(ids: List[int] = Body(...), db: Session = Depends(get_db)):
     """批量删除规则"""
     deleted_count = 0
     for rule_id in ids:

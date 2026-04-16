@@ -11,7 +11,7 @@ export const getRule = (id: number) => api.get(`/rules/${id}`)
 export const createRule = (data: any) => api.post('/rules', data)
 export const updateRule = (id: number, data: any) => api.put(`/rules/${id}`, data)
 export const deleteRule = (id: number) => api.delete(`/rules/${id}`)
-export const batchDeleteRules = (ids: number[]) => api.post('/rules/batch-delete', { ids })
+export const batchDeleteRules = (ids: number[]) => api.post('/rules/batch-delete', ids)
 export const enableRule = (id: number) => api.post(`/rules/${id}/enable`)
 export const disableRule = (id: number) => api.post(`/rules/${id}/disable`)
 export const runRule = (id: number) => api.post(`/rules/${id}/run`)
@@ -86,7 +86,7 @@ export const getLogs = (params?: {
 }) => api.get('/logs', { params });
 
 // Logs batch operations
-export const batchDeleteLogs = (ids: number[]) => api.post('/logs/batch-delete', { ids })
+export const batchDeleteLogs = (ids: number[]) => api.post('/logs/batch-delete', ids)
 
 // ModelConfigs
 export const getModelConfigs = (params?: any) => api.get('/model-configs', { params })
