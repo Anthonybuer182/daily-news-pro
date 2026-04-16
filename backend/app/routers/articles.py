@@ -181,7 +181,7 @@ def delete_article(article_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/batch-delete")
-def batch_delete_articles(ids: List[int] = Body(...), db: Session = Depends(get_db)):
+def batch_delete_articles(request: BatchDeleteRequest, db: Session = Depends(get_db)):
     """批量删除文章"""
     import os
     deleted_count = 0

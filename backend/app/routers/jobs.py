@@ -94,7 +94,7 @@ def update_job(job_id: int, job_update: JobUpdate, db: Session = Depends(get_db)
 def batch_delete_jobs(request: BatchDeleteRequest, db: Session = Depends(get_db)):
     """批量删除任务"""
     deleted_count = 0
-    for job_id in ids:
+    for job_id in request.ids:
         db_job = db.query(Job).filter(Job.id == job_id).first()
         if db_job:
             db.delete(db_job)

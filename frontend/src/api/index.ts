@@ -86,7 +86,7 @@ export const getLogs = (params?: {
 }) => api.get('/logs', { params });
 
 // Logs batch operations
-export const batchDeleteLogs = (ids: number[]) => api.post('/logs/batch-delete', ids)
+export const batchDeleteLogs = (ids: number[]) => api.post('/logs/batch-delete', { ids })
 
 // ModelConfigs
 export const getModelConfigs = (params?: any) => api.get('/model-configs', { params })

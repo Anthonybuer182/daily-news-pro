@@ -59,7 +59,7 @@ class BatchDeleteRequest(BaseModel):
 
 
 @router.post("/batch-delete")
-def batch_delete_logs(ids: List[int] = Body(...), db: Session = Depends(get_db)):
+def batch_delete_logs(request: BatchDeleteRequest, db: Session = Depends(get_db)):
     """批量删除日志"""
     deleted_count = 0
     for log_id in request.ids:
