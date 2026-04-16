@@ -19,9 +19,7 @@ const FIELD_TIPS = {
   max_items: '最大抓取数量，默认3条',
   render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面\n\n💡 不设置时自动推断：\n• content_type 为 xml/json/markdown/text → http\n• content_type 为 html 或未设置 → browser',
   content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本\n\n💡 不设置时默认 html',
-
   extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• attr：链接属性，默认 href\n• type：提取类型，attribute（默认，从属性提取）或 text（从文本提取）\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
-  field_mapping: '字段映射配置（JSON格式）：\n将源数据的字段名映射到标准文章字段\n\n标准字段：title, link, content, description, author, date\n例如：{ "title": "article_title", "author": "writer.name" }',
   delay_min: '抓取请求之间的最小等待时间（秒）\n\n设置延迟防止请求过快被封，例如设为1表示每次请求后至少等待1秒',
   delay_max: '抓取请求之间的最大等待时间（秒）\n\n与min配合使用，随机等待min~max秒。例如1-3秒表示每次等待1-3秒',
   user_agent: '自定义User-Agent字符串\n\n不设置则使用浏览器默认UA。可用于伪装成特定浏览器或移动端',
@@ -184,11 +182,6 @@ const DEFAULT_PLAYWRIGHT_CONFIG = {
     attr: 'href',
     type: 'attribute',
     max_items: 3,
-    // URL 过滤配置
-    url_filters: {
-      include: '',  // 正则表达式，只有匹配的链接才会被抓取
-      exclude: []   // 字符串数组，包含这些字符串的链接会被排除
-    },
     // 列表中每个item的基本信息提取配置
     item_fields: {
       title: { selector: '.title, h3', type: 'text' },
@@ -442,8 +435,10 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleRenderChange = (value: string) => {
     setRender(value)
     form.setFieldValue('render', value)
-    // 根据 render 自动推断 content_type
     if (value === 'http') {
+      setContentType('html')
+      form.setFieldValue('content_type', 'html')
+    } else {
       setContentType('html')
       form.setFieldValue('content_type', 'html')
     }
@@ -452,17 +447,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleContentTypeChange = (value: string) => {
     setContentType(value)
     form.setFieldValue('content_type', value)
-    // 根据 content_type 自动推断 render
-    if (value === 'xml') {
-      setRender('http')
-      form.setFieldValue('render', 'http')
-    } else if (value === 'json') {
-      setRender('http')
-      form.setFieldValue('render', 'http')
-    } else if (value === 'markdown') {
-      setRender('http')
-      form.setFieldValue('render', 'http')
-    } else if (value === 'text') {
+    if (value === 'xml' || value === 'json' || value === 'markdown' || value === 'text') {
       setRender('http')
       form.setFieldValue('render', 'http')
     }
@@ -613,7 +598,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           tooltip={FIELD_TIPS.content_type}
         >
           <Segmented
-            options={CONTENT_TYPE_OPTIONS}
+            options={render === 'http' ? CONTENT_TYPE_OPTIONS : [{ label: 'HTML', value: 'html' }]}
             value={contentType}
             onChange={(value) => handleContentTypeChange(value as string)}
           />
