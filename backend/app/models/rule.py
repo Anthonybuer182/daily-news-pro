@@ -9,6 +9,7 @@ class Rule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    source_url = Column(String(500), nullable=True)
 
     # ============ 两个维度设计 ============
     # 维度1: render (是否需要浏览器渲染)
@@ -81,6 +82,9 @@ class Rule(Base):
 
     # request_config: API 请求配置
     request_config = Column(Text)
+
+    # 最大抓取数量
+    max_items = Column(Integer, default=10)
 
     # 通用配置
     exclude_patterns = Column(Text)

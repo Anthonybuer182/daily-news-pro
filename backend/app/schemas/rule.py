@@ -5,6 +5,7 @@ from datetime import datetime
 
 class RuleBase(BaseModel):
     name: str = Field(..., description="规则名称，用于标识抓取任务，例如：'Pakistan Today 新闻'")
+    source_url: Optional[str] = Field(default=None, description="抓取源 URL，例如列表页、RSS Feed、API 端点")
 
     # ============ 两个维度设计 ============
     # 维度1: render (是否需要浏览器渲染)
@@ -142,7 +143,9 @@ class RuleBase(BaseModel):
 • body.variables: GraphQL 变量 (dict)
 • timeout: 请求超时时间 (秒)""")
 
-    # 旧的选择器字段 (保留用于兼容)
+    # 最大抓取数量
+    max_items: int = Field(default=10, description="最大抓取数量，默认10条")
+
     # 通用配置
     exclude_patterns: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.exclude")
     auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、custom(自定义请求头)")

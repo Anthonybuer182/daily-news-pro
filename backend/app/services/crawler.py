@@ -248,9 +248,7 @@ class CrawlerEngine:
         import httpx
         import subprocess
 
-        extract_config = self._get_extract_config()
-        list_config = extract_config.get("list", {})
-        url = list_config.get("url")
+        url = self.rule.source_url
         if not url:
             raise ValueError("No source URL provided")
 
@@ -449,9 +447,7 @@ class CrawlerEngine:
         if not isinstance(items, list):
             items = [items]
 
-        # 获取 max_items 限制
-        extract_config = self._get_extract_config()
-        max_items = extract_config.get("list", {}).get("max_items")
+        max_items = self.rule.max_items
         if max_items and len(items) > max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items")
@@ -592,9 +588,8 @@ class CrawlerEngine:
         # 处理返回数据
         items = self._extract_items_from_response(data)
 
-        # 获取 max_items 限制
         extract_config = self._get_extract_config()
-        max_items = extract_config.get("list", {}).get("max_items")
+        max_items = self.rule.max_items
         if max_items and len(items) > max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items")
@@ -702,13 +697,12 @@ class CrawlerEngine:
             self._log("warning", "No items found in RSS/Atom feed")
             return {"total": 0, "success": 0, "failed": 0}
 
-        # 获取 max_items 限制
-        extract_config = self._get_extract_config()
-        max_items = extract_config.get("list", {}).get("max_items")
+        max_items = self.rule.max_items
         if max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items (total available: {len(soup.find_all('item') or soup.find_all('entry'))})")
 
+        extract_config = self._get_extract_config()
         # 检查是否需要使用浏览器抓取详情页（混合模式）
         detail_config = extract_config.get("detail", {})
         use_browser_detail = detail_config.get("render") == "browser"
@@ -1096,12 +1090,11 @@ class CrawlerEngine:
         strategy_name = config.get("strategy", "auto")
 
         # 获取列表页 URL
-        list_url = list_config.get("url")
+        list_url = self.rule.source_url
         if not list_url:
             raise ValueError("No list page URL provided")
 
-        # 获取最大抓取数量配置，默认3条
-        max_items = list_config.get("max_items", 3)
+        max_items = self.rule.max_items
         self._log("info", f"Crawling with strategy '{strategy_name}', URL: {list_url}, max_items: {max_items}")
 
         async with PlaywrightCrawler(
@@ -1159,7 +1152,7 @@ class CrawlerEngine:
         pagination_type = pagination.get("type", "button")  # button, scroll, param
         max_pages = pagination.get("max_pages", 5)
         item_fields = list_config.get("item_fields", {})
-        max_items = list_config.get("max_items")  # 获取最大数量限制
+        max_items = self.rule.max_items
 
         all_items = []
         current_url = start_url
@@ -1801,9 +1794,7 @@ class CrawlerEngine:
 
     async def _crawl_simple_playwright(self) -> Dict:
         """Simple single-level crawl for Playwright"""
-        extract_config = self._get_extract_config()
-        list_config = extract_config.get("list", {})
-        url = list_config.get("url")
+        url = self.rule.source_url
         if not url:
             raise ValueError("No URL to crawl")
 

@@ -258,23 +258,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       setRender(rule.render || 'browser')
       setContentType(rule.content_type || 'html')
       setAuthType(rule.auth_type || 'none')
-      // 从 extract_config 中提取 source_url 和 max_items
-      if (rule.extract_config) {
-        try {
-          const config = typeof rule.extract_config === 'string'
-            ? JSON.parse(rule.extract_config)
-            : rule.extract_config
-          if (config?.list) {
-            if (config.list.url) {
-              form.setFieldValue('source_url', config.list.url)
-            }
-            if (config.list.max_items !== undefined) {
-              form.setFieldValue('max_items', config.list.max_items)
-            }
-          }
-        } catch {
-        }
-      }
       // 初始化认证配置
       if (rule.auth_config) {
         try {
@@ -373,34 +356,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     try {
       const values = await form.validateFields()
 
-      // 将 source_url 和 max_items 合并到 extract_config
-      if (values.extract_config) {
-        try {
-          const config = typeof values.extract_config === 'string'
-            ? JSON.parse(values.extract_config)
-            : values.extract_config
-          if (!config.list) {
-            config.list = {}
-          }
-          if (values.source_url) {
-            config.list.url = values.source_url
-          }
-          if (values.max_items !== undefined) {
-            config.list.max_items = values.max_items
-          }
-          values.extract_config = JSON.stringify(config)
-        } catch {
-        }
-      } else if (values.source_url || values.max_items !== undefined) {
-        const config: any = { list: {} }
-        if (values.source_url) {
-          config.list.url = values.source_url
-        }
-        if (values.max_items !== undefined) {
-          config.list.max_items = values.max_items
-        }
-        values.extract_config = JSON.stringify(config)
-      }
 
       // 处理翻译配置 - 选择目标语言即启用翻译
       if (translationFormData.target_lang) {
@@ -467,22 +422,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   // 渲染 HTML/Markdown 配置
   const renderHtmlFields = () => (
     <>
-      <Form.Item
-        name="source_url"
-        label="列表页 URL"
-        tooltip={FIELD_TIPS.source_url}
-      >
-        <Input placeholder="https://example.com/news" />
-      </Form.Item>
-
-      <Form.Item
-        name="max_items"
-        label="最大抓取数量"
-        tooltip={FIELD_TIPS.max_items}
-      >
-        <InputNumber min={1} max={100} defaultValue={3} />
-      </Form.Item>
-
       <Form.Item
         name="extract_config"
         label="抓取配置 (JSON)"
@@ -602,6 +541,23 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
             value={contentType}
             onChange={(value) => handleContentTypeChange(value as string)}
           />
+        </Form.Item>
+
+        <Form.Item
+          name="source_url"
+          label="来源 URL"
+          tooltip={FIELD_TIPS.source_url}
+          rules={[{ required: true, message: '请输入来源 URL' }]}
+        >
+          <Input placeholder="https://example.com/news" />
+        </Form.Item>
+
+        <Form.Item
+          name="max_items"
+          label="最大抓取数量"
+          tooltip={FIELD_TIPS.max_items}
+        >
+          <InputNumber min={1} max={500} />
         </Form.Item>
 
         {contentType === 'html' && renderHtmlFields()}
