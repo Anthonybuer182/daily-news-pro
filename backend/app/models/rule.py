@@ -52,9 +52,6 @@ class Rule(Base):
         return "html"  # 默认 HTML
 
     # ============ 通用配置字段 (JSON 格式) ============
-    # field_mapping: RSS/API 字段映射配置
-    field_mapping = Column(Text)
-
     # extract_config: Playwright 抓取配置 (替换原有的分散选择器字段)
     # 格式: {
     #   "list": {
@@ -84,24 +81,6 @@ class Rule(Base):
 
     # request_config: API 请求配置
     request_config = Column(Text)
-
-    # ============ 旧的选择器字段 (保留用于兼容) ============
-    # Playwright 专用：列表页配置
-    list_selector_type = Column(String(50), default="css")
-    list_selector = Column(String(1000))
-    list_item_selector = Column(String(1000))
-    detail_url_pattern = Column(String(1000))
-
-    # Playwright 专用：内容选择器
-    title_selector_type = Column(String(50), default="css")
-    title_selector = Column(String(1000))
-    content_selector_type = Column(String(50), default="css")
-    content_selector = Column(String(1000))
-    author_selector_type = Column(String(50), default="css")
-    author_selector = Column(String(1000))
-    publish_time_selector_type = Column(String(50), default="css")
-    publish_time_selector = Column(String(1000))
-    cover_image_selector = Column(String(1000))
 
     # 通用配置
     exclude_patterns = Column(Text)

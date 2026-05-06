@@ -183,17 +183,7 @@ class CrawlerEngine:
 
     def _get_field_mapping(self) -> Dict:
         """获取字段映射配置（从 extract_config.mapping 读取）"""
-        extract_config = self._get_extract_config()
-        mapping = extract_config.get("mapping", {})
-        if mapping:
-            return mapping
-        # 兼容旧配置：从 rule.field_mapping 读取
-        if not self.rule.field_mapping:
-            return {}
-        try:
-            return json.loads(self.rule.field_mapping)
-        except:
-            return {}
+        return self._get_extract_config().get("mapping", {})
 
     def _get_extract_config(self) -> Dict:
         """获取 Playwright 提取配置"""
@@ -1257,26 +1247,13 @@ class CrawlerEngine:
         return all_items
 
     def _get_url_filters(self) -> Dict:
-        """获取 URL 过滤配置，优先从 extract_config.list.url_filters 读取，兼容旧字段"""
+        """获取 URL 过滤配置，从 extract_config.list.url_filters 读取"""
         url_filters = {"include": None, "exclude": []}
 
-        extract_config = self._get_extract_config()
-        list_config = extract_config.get("list", {})
-
-        if "url_filters" in list_config:
-            filters = list_config["url_filters"]
-            url_filters["include"] = filters.get("include")
-            url_filters["exclude"] = filters.get("exclude", [])
-        else:
-            url_filters["include"] = self.rule.detail_url_pattern
-            exclude_patterns = self.rule.exclude_patterns
-            if exclude_patterns:
-                try:
-                    url_filters["exclude"] = json.loads(exclude_patterns)
-                except:
-                    url_filters["exclude"] = []
-            else:
-                url_filters["exclude"] = []
+        list_config = self._get_extract_config().get("list", {})
+        filters = list_config.get("url_filters", {})
+        url_filters["include"] = filters.get("include")
+        url_filters["exclude"] = filters.get("exclude", [])
 
         return url_filters
 
@@ -1949,12 +1926,7 @@ class CrawlerEngine:
         if not html:
             raise ValueError(f"Failed to fetch: {url}")
 
-        # Extract content - use trafilatura if no custom selectors configured
-        if self.rule.title_selector is None:
-            # If no custom selectors configured, use trafilatura for better results
-            content = TrafilaturaExtractor.extract_with_fallback(html)
-        else:
-            content = await self._extract_with_selectors(html)
+        content = TrafilaturaExtractor.extract_with_fallback(html)
 
         # Generate markdown
         markdown_content = self._generate_markdown(content, url)
@@ -1978,36 +1950,6 @@ class CrawlerEngine:
 
         self._log("info", f"Extracted article: {article.title}")
         return article
-
-    async def _extract_with_selectors(self, html: str) -> Dict:
-        """Extract using custom selectors (legacy format)"""
-        result = {}
-
-        if self.rule.title_selector:
-            selector_type = self.rule.title_selector_type or "css"
-            if selector_type == "css":
-                result["title"] = SelectorParser.extract_text_css(html, self.rule.title_selector)
-            else:
-                result["title"] = SelectorParser.extract_text_xpath(html, self.rule.title_selector)
-
-        if self.rule.content_selector:
-            selector_type = self.rule.content_selector_type or "css"
-            if selector_type == "css":
-                result["text"] = SelectorParser.extract_text_css(html, self.rule.content_selector)
-            else:
-                result["text"] = SelectorParser.extract_text_xpath(html, self.rule.content_selector)
-
-        if self.rule.author_selector:
-            selector_type = self.rule.author_selector_type or "css"
-            if selector_type == "css":
-                result["author"] = SelectorParser.extract_text_css(html, self.rule.author_selector)
-            else:
-                result["author"] = SelectorParser.extract_text_xpath(html, self.rule.author_selector)
-
-        if self.rule.cover_image_selector:
-            result["image"] = SelectorParser.extract_attribute_css(html, self.rule.cover_image_selector, "src")
-
-        return result
 
     async def _extract_with_config(self, html: str, detail_config: Dict) -> Dict:
         """Extract using new unified extract_config format"""

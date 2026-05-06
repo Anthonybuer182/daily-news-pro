@@ -458,9 +458,9 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     if (type === 'playwright' || type === 'browser') {
       form.setFieldValue('extract_config', JSON.stringify(DEFAULT_PLAYWRIGHT_CONFIG, null, 2))
     } else if (type === 'rss' || type === 'xml') {
-      form.setFieldValue('field_mapping', JSON.stringify(DEFAULT_RSS_CONFIG, null, 2))
+      form.setFieldValue('extract_config', JSON.stringify(DEFAULT_RSS_CONFIG, null, 2))
     } else if (type === 'api' || type === 'json') {
-      form.setFieldValue('field_mapping', JSON.stringify(DEFAULT_API_CONFIG.mapping, null, 2))
+      form.setFieldValue('extract_config', JSON.stringify(DEFAULT_API_CONFIG, null, 2))
     }
   }
 

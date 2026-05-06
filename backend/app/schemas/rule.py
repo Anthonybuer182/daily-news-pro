@@ -27,7 +27,6 @@ class RuleBase(BaseModel):
 • 不设置：默认 html""")
 
     # 通用配置字段 (JSON 格式) - 统一的 extract_config
-    field_mapping: Optional[str] = Field(default=None, description="字段映射配置，JSON格式。用于API/RSS等场景，将原始数据字段映射到目标字段")
     extract_config: Optional[str] = Field(default=None, description="""提取配置，JSON格式。统一配置格式：
 
 【通用结构】
@@ -144,22 +143,6 @@ class RuleBase(BaseModel):
 • timeout: 请求超时时间 (秒)""")
 
     # 旧的选择器字段 (保留用于兼容)
-    list_selector_type: str = Field(default="css", description="列表选择器类型：css(CSS选择器) 或 xpath(XPath表达式)")
-    list_selector: Optional[str] = Field(default=None, description="文章列表的CSS/XPath选择器，例如：'div.article-list a' 或 '//div[@class=\"article\"]/a'")
-    list_item_selector: Optional[str] = Field(default=None, description="列表中每个文章项的选择器，用于精确定位文章链接元素")
-    detail_url_pattern: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.include")
-
-    # Playwright 专用：内容选择器
-    title_selector_type: str = Field(default="css", description="标题选择器类型：css 或 xpath")
-    title_selector: Optional[str] = Field(default=None, description="文章标题选择器，例如：'h1.entry-title' 或 '//h1[@class=\"title\"]'")
-    content_selector_type: str = Field(default="css", description="内容选择器类型：css 或 xpath")
-    content_selector: Optional[str] = Field(default=None, description="文章内容选择器，例如：'div.article-content'。type可设为'html'(保留HTML标签)或'text'(纯文本)")
-    author_selector_type: str = Field(default="css", description="作者选择器类型：css 或 xpath")
-    author_selector: Optional[str] = Field(default=None, description="文章作者选择器，例如：'span.author-name' 或 '//a[@rel=\"author\"]'")
-    publish_time_selector_type: str = Field(default="css", description="发布时间选择器类型：css 或 xpath")
-    publish_time_selector: Optional[str] = Field(default=None, description="文章发布时间选择器，例如：'time.publish-date'。抓取后会自动解析常见日期格式")
-    cover_image_selector: Optional[str] = Field(default=None, description="封面图片选择器，例如：'img.article-cover'。支持从src或data-src属性获取图片URL")
-
     # 通用配置
     exclude_patterns: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.exclude")
     auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、custom(自定义请求头)")
