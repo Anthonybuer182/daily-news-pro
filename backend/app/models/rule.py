@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
@@ -124,6 +124,5 @@ class Rule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    levels = relationship("RuleLevel", back_populates="rule", cascade="all, delete-orphan")
     articles = relationship("Article", back_populates="rule")
     jobs = relationship("Job", back_populates="rule")

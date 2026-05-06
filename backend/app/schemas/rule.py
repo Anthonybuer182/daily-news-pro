@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
-from app.schemas.rule_level import RuleLevel
 
 
 class RuleBase(BaseModel):
@@ -225,7 +224,6 @@ class Rule(RuleBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    levels: List[RuleLevel] = []
 
     class Config:
         from_attributes = True

@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
-from app.models import Rule, RuleLevel, Article, Job, Log
+from app.models import Rule, Article, Job, Log
 from app.services.playwright_crawler import PlaywrightCrawler
 from app.services.trafilatura_extractor import TrafilaturaExtractor
 from app.services.selector import SelectorParser
@@ -1092,16 +1092,10 @@ class CrawlerEngine:
 
     async def _crawl_browser(self) -> Dict:
         """Playwright + Trafilatura 抓取"""
-        # 检查是否有新的 extract_config 配置
         extract_config = self._get_extract_config()
         if extract_config:
             return await self._crawl_with_config(extract_config)
-
-        # 旧逻辑：检查是否有层级配置
-        if self.rule.levels:
-            return await self._crawl_with_levels()
-        else:
-            return await self._crawl_simple_playwright()
+        return await self._crawl_simple_playwright()
 
     async def _crawl_with_config(self, config: Dict) -> Dict:
         """使用新的统一配置抓取 - 基于策略注册表"""
@@ -1828,31 +1822,6 @@ class CrawlerEngine:
         self._log("info", f"Extracted article: {article.title}")
         return article
 
-    async def _crawl_with_levels(self) -> Dict:
-        """Crawl using level configuration"""
-        levels = self.db.query(RuleLevel).filter(
-            RuleLevel.rule_id == self.rule.id
-        ).order_by(RuleLevel.level).all()
-
-        if not levels:
-            return await self._crawl_simple_playwright()
-
-        # Start with first level URLs
-        current_urls = [levels[0].url] if levels[0].url else []
-
-        for level in levels:
-            if level.is_final:
-                if level.link_selector:
-                    final_urls = await self._extract_links(current_urls, level)
-                    self._log("info", f"Final level extracted {len(final_urls)} links")
-                    return await self._extract_articles(final_urls)
-                else:
-                    return await self._extract_articles(current_urls)
-            else:
-                current_urls = await self._extract_links(current_urls, level)
-
-        return {"urls": current_urls}
-
     async def _crawl_simple_playwright(self) -> Dict:
         """Simple single-level crawl for Playwright"""
         extract_config = self._get_extract_config()
@@ -1862,12 +1831,12 @@ class CrawlerEngine:
             raise ValueError("No URL to crawl")
 
         # Extract links
-        links = await self._extract_links([url], None)
+        links = await self._extract_links([url])
 
         # Extract content from links
         return await self._extract_articles(links)
 
-    async def _extract_links(self, urls: List[str], level: Optional[RuleLevel]) -> List[str]:
+    async def _extract_links(self, urls: List[str]) -> List[str]:
         """Extract links from pages"""
         all_links = []
 
@@ -1883,7 +1852,7 @@ class CrawlerEngine:
             ) as crawler:
                 html = await self._fetch_with_method(urls[0], crawler)
                 if html:
-                    all_links = self._extract_links_from_html(html, urls[0], level)
+                    all_links = self._extract_links_from_html(html, urls[0])
         else:
             # http 模式 - 使用 httpx
             for url in urls:
@@ -1892,103 +1861,40 @@ class CrawlerEngine:
                 if not html:
                     continue
 
-                # Extract links
-                if level and level.link_selector:
-                    selector = level.link_selector
-                    selector_type = level.selector_type or "css"
-                    base_url = url
+                # Default: extract all article links
+                from bs4 import BeautifulSoup
 
-                    if selector_type == "css":
-                        links = SelectorParser.extract_links_css(html, selector, base_url)
-                    elif selector_type == "xpath":
-                        links = SelectorParser.extract_links_xpath(html, selector, base_url)
-                    elif selector_type == "regex":
-                        links = SelectorParser.extract_by_regex(html, selector)
-                    elif selector_type == "rss" or selector == "link":
-                        # Special handling for RSS feeds - extract from <link> tags
-                        links = []
-                        from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, 'lxml')
+                links_found = soup.find_all('a', href=True)
+
+                # If no links found, try XML parser (for RSS content)
+                if not links_found:
+                    try:
                         soup = BeautifulSoup(html, 'xml')
                         for link in soup.find_all('link'):
                             text = link.get_text()
                             if text and text.startswith('http'):
-                                links.append(text)
-                        for guid in soup.find_all('guid'):
-                            text = guid.get_text()
-                            if text and text.startswith('http'):
-                                links.append(text)
-                    else:
-                        links = []
+                                all_links.append(text)
+                        for link in soup.find_all('a', href=True):
+                            href = link.get('href')
+                            if href and href.startswith('http'):
+                                all_links.append(href)
+                    except:
+                        pass
 
-                    all_links.extend(links)
-                else:
-                    # Default: extract all article links
-                    from bs4 import BeautifulSoup
+                # Last resort: regex
+                if not all_links:
+                    import re
+                    all_links = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', html)
 
-                    # Try HTML parser first
-                    soup = BeautifulSoup(html, 'lxml')
-                    links_found = soup.find_all('a', href=True)
+                for href in links_found:
+                    href = href.get('href') if hasattr(href, 'get') else href
+                    if href and href.startswith('http'):
+                        all_links.append(href)
 
-                    # If no links found, try XML parser (for RSS content)
-                    if not links_found:
-                        try:
-                            soup = BeautifulSoup(html, 'xml')
-                            # For RSS, extract from <link> tags
-                            for link in soup.find_all('link'):
-                                text = link.get_text()
-                                if text and text.startswith('http'):
-                                    all_links.append(text)
-                            # Also check for <a> tags
-                            for link in soup.find_all('a', href=True):
-                                href = link.get('href')
-                                if href and href.startswith('http'):
-                                    all_links.append(href)
-                        except:
-                            pass
-
-                    # Last resort: regex
-                    if not all_links:
-                        import re
-                        all_links = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', html)
-
-                    for href in links_found:
-                        href = href.get('href') if hasattr(href, 'get') else href
-                        if href and href.startswith('http'):
-                            all_links.append(href)
-
-        # Filter and deduplicate
-        # For intermediate levels (not final), only apply exclude_patterns, skip detail_url_pattern
-        if level and not level.is_final:
-            # Only apply exclude_patterns filtering for intermediate levels
-            all_links = self._filter_links(all_links, apply_detail_pattern=False)
-        else:
-            all_links = self._filter_links(all_links)
-
+        all_links = self._filter_links(all_links)
         self._log("info", f"Extracted {len(all_links)} links")
         return all_links
-
-    async def _handle_pagination(self, crawler: PlaywrightCrawler, url: str, level: RuleLevel) -> List[str]:
-        """Handle pagination"""
-        links = []
-        max_pages = level.pagination_max or 10
-
-        if level.pagination_type == "button":
-            for page_num in range(max_pages):
-                html = await crawler.fetch(url)
-                if html:
-                    selector = level.link_selector or "a"
-                    selector_type = level.selector_type or "css"
-                    if selector_type == "css":
-                        page_links = SelectorParser.extract_links_css(html, selector, url)
-                    else:
-                        page_links = SelectorParser.extract_links_xpath(html, selector, url)
-                    links.extend(page_links)
-
-                # Try to find next page button
-                # This is simplified - real implementation would click the button
-                break
-
-        return links
 
     async def _extract_articles(self, urls: List[str]) -> Dict:
         """Extract content from article URLs"""
@@ -2515,52 +2421,21 @@ class CrawlerEngine:
             self._log("error", f"Failed to fetch {url}: {e}")
             return None
 
-    def _extract_links_from_html(self, html: str, url: str, level: Optional[RuleLevel]) -> List[str]:
+    def _extract_links_from_html(self, html: str, url: str) -> List[str]:
         """Extract links from HTML"""
+        import re
         links = []
 
-        # Apply pagination if configured
-        # Skip for simplicity
+        # Try to find all /p/XXX patterns first (common for news sites)
+        article_paths = re.findall(r'(https?://[^\s"\')]+/p/\d+[^\s"\')]*)', html)
+        links.extend(article_paths)
 
-        # Extract links using selector
-        if level and level.link_selector:
-            selector = level.link_selector
-            selector_type = level.selector_type or "css"
-            base_url = url
-
-            if selector_type == "css":
-                links = SelectorParser.extract_links_css(html, selector, base_url)
-            elif selector_type == "xpath":
-                links = SelectorParser.extract_links_xpath(html, selector, base_url)
-            elif selector_type == "regex":
-                links = SelectorParser.extract_by_regex(html, selector)
-            elif selector_type == "rss" or selector == "link":
-                # Special handling for RSS feeds - extract from <link> tags
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(html, 'xml')
-                for link in soup.find_all('link'):
-                    text = link.get_text()
-                    if text and text.startswith('http'):
-                        links.append(text)
-                for guid in soup.find_all('guid'):
-                    text = guid.get_text()
-                    if text and text.startswith('http'):
-                        links.append(text)
-        else:
-            # Default: extract all article links
-            # For JavaScript-rendered content (Playwright), try regex first
-            import re
-            # Try to find all /p/XXX patterns first (common for news sites)
-            article_paths = re.findall(r'(https?://[^\s"\')]+/p/\d+[^\s"\')]*)', html)
-            links.extend(article_paths)
-
-            # Also try BeautifulSoup as fallback
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html, 'lxml')
-            for a in soup.find_all('a', href=True):
-                href = a['href']
-                if href.startswith('http'):
-                    links.append(href)
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, 'lxml')
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            if href.startswith('http'):
+                links.append(href)
 
         return list(set(links))  # Deduplicate
 
