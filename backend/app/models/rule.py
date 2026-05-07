@@ -87,7 +87,6 @@ class Rule(Base):
     max_items = Column(Integer, default=10)
 
     # 通用配置
-    exclude_patterns = Column(Text)
     auth_type = Column(String(50), default="none")
     auth_config = Column(Text)
     proxy_config = Column(String(500))

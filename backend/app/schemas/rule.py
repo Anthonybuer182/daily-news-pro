@@ -147,7 +147,6 @@ class RuleBase(BaseModel):
     max_items: int = Field(default=10, description="最大抓取数量，默认10条")
 
     # 通用配置
-    exclude_patterns: Optional[str] = Field(default=None, description="⚠️ 已废弃，请使用 extract_config.list.url_filters.exclude")
     auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、custom(自定义请求头)")
     auth_config: Optional[str] = Field(default=None, description="""认证配置，JSON格式。根据auth_type配置用户名密码或Token等。
 
