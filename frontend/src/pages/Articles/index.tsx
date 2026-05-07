@@ -271,6 +271,7 @@ export default function Articles() {
             images={previewArticle.images || []}
             tags={previewArticle.tags || []}
             url={previewArticle.url}
+            extra={previewArticle.extra || {}}
           />
         )}
       </Modal>

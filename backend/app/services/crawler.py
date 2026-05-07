@@ -811,6 +811,7 @@ class CrawlerEngine:
         date_field    = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
         image_field   = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
         images_spec   = field_mapping.get("images")
+        extra_spec    = field_mapping.get("extra")  # dict: {显示标签: API字段名}，如 {"投票数": "votesCount"}
 
         # 提取字段
         title   = self._get_nested_field(item, title_field)
@@ -820,6 +821,14 @@ class CrawlerEngine:
         author  = self._get_nested_field(item, author_field)
         date_str = self._get_nested_field(item, date_field)
         image   = self._get_nested_field(item, image_field)
+
+        # 提取扩展字段
+        extra_data: Dict = {}
+        if isinstance(extra_spec, dict):
+            for label, api_field in extra_spec.items():
+                val = self._get_nested_field(item, api_field)
+                if val is not None:
+                    extra_data[label] = val
 
         # 提取所有图片列表（支持 "media[type=image].url" 语法）
         images_list = None
@@ -861,6 +870,7 @@ class CrawlerEngine:
             publish_time=self._parse_date(date_str),
             cover_image=image,
             images=json.dumps(images_list, ensure_ascii=False) if images_list else None,
+            extra=json.dumps(extra_data, ensure_ascii=False) if extra_data else None,
             markdown_file=markdown_file,
             status="success",
         )

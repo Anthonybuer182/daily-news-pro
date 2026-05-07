@@ -122,11 +122,13 @@ def update_article(article_id: int, article_update: ArticleUpdate, db: Session =
 
     update_data = article_update.model_dump(exclude_unset=True)
 
-    # 处理 tags / images 字段（从 List 转为 JSON 字符串存储）
+    # 处理 tags / images / extra 字段（从 Python 对象转为 JSON 字符串存储）
     if 'tags' in update_data:
         update_data['tags'] = json.dumps(update_data['tags'], ensure_ascii=False)
     if 'images' in update_data and update_data['images'] is not None:
         update_data['images'] = json.dumps(update_data['images'], ensure_ascii=False)
+    if 'extra' in update_data and update_data['extra'] is not None:
+        update_data['extra'] = json.dumps(update_data['extra'], ensure_ascii=False)
 
     # 如果提供了 markdown_content，更新 markdown 文件
     if 'markdown_content' in update_data:

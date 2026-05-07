@@ -81,6 +81,16 @@ export default function ArticleDetail() {
     }
   }
 
+  // 解析 extra
+  let extra: Record<string, any> = {};
+  if (article.extra) {
+    try {
+      extra = typeof article.extra === 'string' ? JSON.parse(article.extra) : article.extra;
+    } catch {
+      extra = {};
+    }
+  }
+
   return (
     <Layout style={{ minHeight: '100vh', background: '#fff' }}>
       <Header style={{
@@ -124,6 +134,7 @@ export default function ArticleDetail() {
             cover_image={article.cover_image}
             images={images}
             tags={tags}
+            extra={extra}
           />
         </div>
       </Content>

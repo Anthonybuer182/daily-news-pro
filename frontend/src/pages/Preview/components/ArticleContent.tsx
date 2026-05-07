@@ -14,6 +14,7 @@ interface ArticleContentProps {
   images?: string[]
   tags?: string[]
   url?: string
+  extra?: Record<string, any>
 }
 
 export default function ArticleContent({
@@ -24,7 +25,8 @@ export default function ArticleContent({
   cover_image,
   images,
   tags,
-  url
+  url,
+  extra,
 }: ArticleContentProps) {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [previewVisible, setPreviewVisible] = useState(false)
@@ -70,7 +72,7 @@ export default function ArticleContent({
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        marginBottom: 20,
+        marginBottom: 12,
         color: '#666',
         fontSize: 14
       }}>
@@ -83,6 +85,25 @@ export default function ArticleContent({
         {author && publish_time && <span>·</span>}
         {publish_time && <span>{publish_time}</span>}
       </div>
+
+      {/* Extra Fields */}
+      {extra && Object.keys(extra).length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 16,
+          marginBottom: 20,
+        }}>
+          {Object.entries(extra).map(([label, value]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>
+                {typeof value === 'number' ? value.toLocaleString() : String(value)}
+              </span>
+              <span style={{ fontSize: 13, color: '#999' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Tags */}
       {tags && tags.length > 0 && (

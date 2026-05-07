@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import json
 
@@ -32,6 +32,7 @@ class ArticleUpdate(BaseModel):
     status: Optional[str] = None
     error_message: Optional[str] = None
     tags: Optional[List[str]] = None
+    extra: Optional[Dict[str, Any]] = None
 
 
 class Article(ArticleBase):
@@ -42,6 +43,7 @@ class Article(ArticleBase):
     rule_name: Optional[str] = None
     tags: Optional[List[str]] = []
     images: Optional[List[str]] = []
+    extra: Optional[Dict[str, Any]] = {}
 
     @field_validator('tags', mode='before')
     @classmethod
@@ -62,6 +64,16 @@ class Article(ArticleBase):
             except:
                 return []
         return v or []
+
+    @field_validator('extra', mode='before')
+    @classmethod
+    def parse_extra(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return {}
+        return v or {}
 
     class Config:
         from_attributes = True
