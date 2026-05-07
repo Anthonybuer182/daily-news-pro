@@ -39,20 +39,18 @@ class CrawlerEngine:
         self.job.started_at = datetime.utcnow()
         self.db.commit()
 
-        # 使用新的两个维度
-        render = self.rule.get_render()
-        content_type = self.rule.get_content_type()
+        fetch_mode = self._get_list_fetch_mode()
+        content_type = self._get_list_content_type()
 
-        self._log("info", f"Starting crawl for rule: {self.rule.name}, render: {render}, content_type: {content_type}")
+        self._log("info", f"Starting crawl for rule: {self.rule.name}, fetch_mode: {fetch_mode}, content_type: {content_type}")
 
         try:
-            # 根据 render 分发处理
-            if render == "http":
+            if fetch_mode == "static":
                 result = await self._crawl_http()
-            elif render == "browser":
+            elif fetch_mode == "dynamic":
                 result = await self._crawl_browser()
             else:
-                raise ValueError(f"Unknown render: {render}")
+                raise ValueError(f"Unknown fetch_mode: {fetch_mode}")
 
             self.job.status = "success"
             self.job.finished_at = datetime.utcnow()
@@ -195,15 +193,29 @@ class CrawlerEngine:
         except:
             return {}
 
-    def _get_request_config(self) -> Dict:
-        """获取 API 请求配置"""
-        if not self.rule.request_config:
-            return {}
+    def _get_list_config(self) -> Dict:
+        """获取 extract_config.list 配置"""
+        return self._get_extract_config().get("list", {})
 
-        try:
-            return json.loads(self.rule.request_config)
-        except:
-            return {}
+    def _get_list_url(self) -> str:
+        """获取列表页 URL"""
+        return self._get_list_config().get("url", "")
+
+    def _get_list_fetch_mode(self) -> str:
+        """获取列表页抓取方式，默认 dynamic（浏览器）"""
+        return self._get_list_config().get("fetch_mode", "dynamic")
+
+    def _get_list_content_type(self) -> str:
+        """获取列表页内容格式，默认 html"""
+        return self._get_list_config().get("content_type", "html")
+
+    def _get_list_max_items(self) -> int:
+        """获取最大抓取数量，默认 10"""
+        return self._get_list_config().get("max_items", 10)
+
+    def _get_list_request(self) -> Dict:
+        """获取列表页 HTTP 请求配置（位于 extract_config.list.request）"""
+        return self._get_list_config().get("request", {})
 
     def _get_proxy_config(self) -> Optional[Dict]:
         """获取代理配置"""
@@ -238,31 +250,26 @@ class CrawlerEngine:
         import httpx
         import subprocess
 
-        url = self.rule.source_url
+        url = self._get_list_url()
         if not url:
-            raise ValueError("No source URL provided")
+            raise ValueError("No source URL provided (extract_config.list.url)")
 
-        content_type = self.rule.get_content_type()
+        content_type = self._get_list_content_type()
         self._log("info", f"Fetching URL: {url}, content_type: {content_type}")
 
         try:
-            # 获取请求配置
             headers = {}
             if self.rule.user_agent:
                 headers["User-Agent"] = self.rule.user_agent
 
-            # 获取 request_config
-            request_config = self._get_request_config()
+            request_config = self._get_list_request()
 
-            # 处理动态日期参数
             from datetime import timedelta
             import re as re_module
 
-            # 计算昨天日期 (ISO 格式)
             yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
             today = datetime.now().strftime("%Y-%m-%d")
 
-            # 处理 URL 中的动态日期
             if "{{days_ago}}" in url:
                 match_days = 7
                 m = re_module.search(r'created:>(\d+)', url)
@@ -272,12 +279,10 @@ class CrawlerEngine:
                 url = url.replace("{{days_ago}}", date)
                 self._log("info", f"Using date: {date} for API query")
 
-            # 构建请求参数
             kwargs = RequestConfigManager.build_request_kwargs(
                 request_config, url, headers
             )
 
-            # 处理 request_config body 中的动态日期占位符
             if "{{yesterday}}" in request_config.get("body", {}).get("query", ""):
                 kwargs["json"]["query"] = request_config["body"]["query"].replace(
                     "{{yesterday}}", yesterday
@@ -417,7 +422,7 @@ class CrawlerEngine:
         if not isinstance(items, list):
             items = [items]
 
-        max_items = self.rule.max_items
+        max_items = self._get_list_max_items()
         if max_items and len(items) > max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items")
@@ -559,7 +564,7 @@ class CrawlerEngine:
         items = self._extract_items_from_response(data)
 
         extract_config = self._get_extract_config()
-        max_items = self.rule.max_items
+        max_items = self._get_list_max_items()
         if max_items and len(items) > max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items")
@@ -568,7 +573,7 @@ class CrawlerEngine:
 
         # 检查是否需要使用浏览器抓取详情页（混合模式）
         detail_config = extract_config.get("detail", {})
-        use_browser_detail = detail_config.get("render") == "browser"
+        use_browser_detail = detail_config.get("fetch_mode") == "dynamic"
 
         if use_browser_detail:
             # 混合模式：HTTP 列表 + Browser 详情
@@ -667,7 +672,7 @@ class CrawlerEngine:
             self._log("warning", "No items found in RSS/Atom feed")
             return {"total": 0, "success": 0, "failed": 0}
 
-        max_items = self.rule.max_items
+        max_items = self._get_list_max_items()
         if max_items:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items (total available: {len(soup.find_all('item') or soup.find_all('entry'))})")
@@ -675,7 +680,7 @@ class CrawlerEngine:
         extract_config = self._get_extract_config()
         # 检查是否需要使用浏览器抓取详情页（混合模式）
         detail_config = extract_config.get("detail", {})
-        use_browser_detail = detail_config.get("render") == "browser"
+        use_browser_detail = detail_config.get("fetch_mode") == "dynamic"
 
         if use_browser_detail:
             # 混合模式：HTTP 列表 + Browser 详情
@@ -1059,12 +1064,11 @@ class CrawlerEngine:
         # 获取策略名称（从 extract_config 中获取，不从 rule 字段）
         strategy_name = config.get("strategy", "auto")
 
-        # 获取列表页 URL
-        list_url = self.rule.source_url
+        list_url = self._get_list_url()
         if not list_url:
-            raise ValueError("No list page URL provided")
+            raise ValueError("No list page URL provided (extract_config.list.url)")
 
-        max_items = self.rule.max_items
+        max_items = self._get_list_max_items()
         self._log("info", f"Crawling with strategy '{strategy_name}', URL: {list_url}, max_items: {max_items}")
 
         async with PlaywrightCrawler(
@@ -1122,7 +1126,7 @@ class CrawlerEngine:
         pagination_type = pagination.get("type", "button")  # button, scroll, param
         max_pages = pagination.get("max_pages", 5)
         item_fields = list_config.get("item_fields", {})
-        max_items = self.rule.max_items
+        max_items = self._get_list_max_items()
 
         all_items = []
         current_url = start_url
@@ -1764,9 +1768,9 @@ class CrawlerEngine:
 
     async def _crawl_simple_playwright(self) -> Dict:
         """Simple single-level crawl for Playwright"""
-        url = self.rule.source_url
+        url = self._get_list_url()
         if not url:
-            raise ValueError("No URL to crawl")
+            raise ValueError("No URL to crawl (extract_config.list.url)")
 
         # Extract links
         links = await self._extract_links([url])
@@ -1778,11 +1782,10 @@ class CrawlerEngine:
         """Extract links from pages"""
         all_links = []
 
-        # 使用 render 决定提取策略
-        render = self.rule.get_render()
+        fetch_mode = self._get_list_fetch_mode()
 
-        if render == "browser":
-            # browser 模式 - 使用 Playwright
+        if fetch_mode == "dynamic":
+            # dynamic 模式 - 使用 Playwright
             async with PlaywrightCrawler(
                 user_agent=self.rule.user_agent,
                 delay_min=self.rule.delay_min,

@@ -138,8 +138,8 @@ export default function Articles() {
 
   const getRenderTag = (render: string) => {
     const tagMap: Record<string, { color: string; text: string }> = {
-      http: { color: 'blue', text: 'HTTP' },
-      browser: { color: 'green', text: '浏览器' },
+      static: { color: 'blue', text: '静态抓取' },
+      dynamic: { color: 'green', text: '动态抓取' },
     }
     const tag = tagMap[render] || { color: 'default', text: render || '-' }
     return <Tag color={tag.color}>{tag.text}</Tag>
@@ -154,7 +154,7 @@ export default function Articles() {
     { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: true,
       render: (v: string) => v || '-'
     },
-    { title: '渲染方式', dataIndex: 'rule_render', key: 'rule_render',
+    { title: '抓取方式', dataIndex: 'rule_render', key: 'rule_render',
       render: (v: string) => getRenderTag(v)
     },
     { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,

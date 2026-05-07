@@ -9,58 +9,36 @@ class Rule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    source_url = Column(String(500), nullable=True)
 
-    # ============ 两个维度设计 ============
-    # 维度1: render (是否需要浏览器渲染)
-    # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
-    render = Column(String(20), nullable=True)
-
-    # 维度2: content_type (返回内容格式)
-    # 可选值: html, xml, json, markdown, text
-    content_type = Column(String(20), nullable=True)
-
-    def get_render(self) -> str:
-        """获取渲染方式，未设置时默认 browser"""
-        return self.render or "browser"
-
-    def get_content_type(self) -> str:
-        """获取内容格式，未设置时默认 html"""
-        return self.content_type or "html"
-
-    # ============ 通用配置字段 (JSON 格式) ============
-    # extract_config: Playwright 抓取配置 (替换原有的分散选择器字段)
-    # 格式: {
+    # 所有抓取配置统一在 extract_config 中，按阶段分层：
+    # {
     #   "list": {
-    #     "url": "https://example.com/news",  # 列表页URL
-    #     "selector": ".article-list a",      # 文章链接选择器
-    #     "attr": "href",                # 链接属性 (默认 href)
-    #     "type": "attribute",            # 提取类型：attribute(默认) 或 text
-    #     "pagination": {                     # 分页配置 (可选)
-    #       "type": "next-button",           # next-button, infinite-scroll, page-param
-    #       "selector": ".next-page",        # 下一页按钮选择器
-    #       "max_pages": 10                  # 最大页数
-    #     }
+    #     "url": "https://...",           列表页入口 URL
+    #     "fetch_mode": "static|dynamic",  抓取方式（static=HTTP直连, dynamic=Playwright浏览器）
+    #     "content_type": "html|json|xml|markdown|text",  响应格式
+    #     "max_items": 10,                最大抓取数量
+    #     "request": {                    HTTP 请求配置（fetch_mode=static 时使用）
+    #       "method": "POST",
+    #       "auth": {"type": "bearer", "token": "..."},
+    #       "headers": {...},
+    #       "body": {...},
+    #       "timeout": 30
+    #     },
+    #     "selector": "article a",        链接选择器
+    #     "fields": {...},                列表项字段提取
+    #     "url_filters": {...},           链接过滤
+    #     "pagination": {...}             分页配置
     #   },
     #   "detail": {
-    #     "title": { "selector": "h1.title", "type": "text" },
-    #     "content": { "selector": ".article-content", "type": "html" },
-    #     "author": { "selector": ".author", "type": "text" },
-    #     "date": { "selector": ".date", "type": "text", "format": "YYYY-MM-DD" },
-    #     "image": { "selector": "img.cover", "type": "attribute", "attr": "src" }
-    #   },
-    #   "wait": {
-    #     "after_navigate": 1000,            # 导航后等待毫秒数
-    #     "before_extract": ".loaded"        # 提取前等待元素
+    #     "fetch_mode": "dynamic",        详情页抓取方式（可与 list 不同）
+    #     "content_type": "html",         详情页内容格式（默认 html）
+    #     "fields": {                     详情页字段提取
+    #       "title": {"selector": "h1", "type": "text"},
+    #       "content": {"selector": "article", "type": "html"}
+    #     }
     #   }
     # }
     extract_config = Column(Text)
-
-    # request_config: API 请求配置
-    request_config = Column(Text)
-
-    # 最大抓取数量
-    max_items = Column(Integer, default=10)
 
     # 通用配置
     proxy_config = Column(String(500))

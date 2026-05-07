@@ -121,12 +121,16 @@ export default function Rules() {
   }
 
   const getRenderTag = (record: any) => {
-    const render = record.render || (record.content_type === 'html' ? 'browser' : 'http')
+    let fetchMode = 'dynamic'
+    try {
+      const config = record.extract_config ? JSON.parse(record.extract_config) : {}
+      fetchMode = config?.list?.fetch_mode || 'dynamic'
+    } catch { /* ignore */ }
     const tagMap: Record<string, { color: string; text: string }> = {
-      http: { color: 'blue', text: 'HTTP' },
-      browser: { color: 'green', text: '浏览器' },
+      static: { color: 'blue', text: '静态抓取' },
+      dynamic: { color: 'green', text: '动态抓取' },
     }
-    const tag = tagMap[render] || { color: 'default', text: render }
+    const tag = tagMap[fetchMode] || { color: 'default', text: fetchMode }
     return <Tag color={tag.color}>{tag.text}</Tag>
   }
 
@@ -144,7 +148,7 @@ export default function Rules() {
         }
       }
     },
-    { title: '渲染方式', key: 'render',
+    { title: '抓取方式', key: 'fetch_mode',
       render: (_: any, record: any) => getRenderTag(record)
     },
     { title: '状态', dataIndex: 'status', key: 'status',

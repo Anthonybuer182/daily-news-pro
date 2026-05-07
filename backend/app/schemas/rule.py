@@ -5,154 +5,110 @@ from datetime import datetime
 
 class RuleBase(BaseModel):
     name: str = Field(..., description="规则名称，用于标识抓取任务，例如：'Pakistan Today 新闻'")
-    source_url: Optional[str] = Field(default=None, description="抓取源 URL，例如列表页、RSS Feed、API 端点")
 
-    # ============ 两个维度设计 ============
-    # 维度1: render (是否需要浏览器渲染)
-    # 可选值: http (直接HTTP请求), browser (浏览器渲染，支持JS)
-    # 可不设置，会根据 content_type 自动推断
-    render: Optional[str] = Field(default=None, description="""渲染方式：
-• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）
-• browser：浏览器渲染抓取，适用于JS加载的动态页面
-• 不设置：根据 content_type 自动推断""")
+    # 所有抓取配置统一在 extract_config 中，按阶段分层
+    extract_config: Optional[str] = Field(default=None, description="""抓取配置，JSON格式。list 和 detail 两阶段各自独立配置。
 
-    # 维度2: content_type (返回内容格式)
-    # 可选值: html, xml, json, markdown, text
-    # 可不设置，默认 html
-    content_type: Optional[str] = Field(default=None, description="""内容格式：
-• html：HTML 网页（默认）
-• xml：XML 格式（RSS/Atom）
-• json：JSON API 接口
-• markdown：Markdown 文件（如 GitHub README）
-• text：纯文本
-• 不设置：默认 html""")
-
-    # 通用配置字段 (JSON 格式) - 统一的 extract_config
-    extract_config: Optional[str] = Field(default=None, description="""提取配置，JSON格式。统一配置格式：
-
-【通用结构】
+【完整结构】
 {
   "list": {
-    "selector": "CSS选择器",
-    "attr": "href",              // 链接属性，用于提取详情页URL
-    "type": "attribute",         // 提取类型：attribute（默认，从属性提取）、text（从文本提取）
-    "xpath": "XPath表达式",
-    "regex": "正则表达式",
-    "fields": {
-      "url": {"op": "css", "selector": "a", "attr": "href"},
-      "title": {"op": "css", "selector": "h2", "type": "text"}
-    },
+    "url": "https://example.com/news",
+    "fetch_mode": "static|dynamic",
+    "content_type": "html|json|xml|markdown|text",
     "max_items": 10,
-    "url_filters": {
-      "include": "正则表达式",     // 白名单：必须匹配才抓取
-      "exclude": ["字符串1", "字符串2"]  // 黑名单：包含这些字符串的不抓取
+    "request": {
+      "method": "POST",
+      "auth": {"type": "bearer", "token": "xxx"},
+      "headers": {"Content-Type": "application/json"},
+      "body": {"type": "graphql", "query": "..."},
+      "timeout": 30
     },
-    "pagination": {...}
-  },
-  "detail": {
-    "fields": {...}
-  }
-}
-
-【URL过滤配置 (url_filters)】
-在 list.url_filters 中配置链接过滤规则：
-- include: 正则表达式，只有匹配该正则的链接才会被抓取
-- exclude: 字符串数组，包含任意一个字符串的链接会被排除
-
-【支持的提取操作 (op)】
-• css：CSS选择器提取
-• xpath：XPath表达式提取
-• regex：正则表达式提取
-• json_path：JSON路径提取
-• template：模板格式化
-• nearby：附近内容提取
-• chain：链式操作
-• switch：条件选择
-
-【示例 - HTML列表】
-{
-  "list": {
-    "selector": "article.item",
-    "url_filters": {
-      "include": "https://example\\.com/article/\\d+",
-      "exclude": ["/tag/", "/category/", "/sponsored/"]
-    },
+    "selector": "article a",
     "fields": {
       "title": {"op": "css", "selector": "h2", "type": "text"},
-      "url": {"op": "css", "selector": "a", "attr": "href"},
-      "desc": {"op": "css", "selector": "p", "type": "text"}
+      "url": {"op": "css", "selector": "a", "attr": "href"}
     },
-    "max_items": 10
-  }
-}
-
-【示例 - GitHub README】
-{
-  "strategy": "markdown_github",
-  "list": {
-    "url_pattern": "https://github\\.com/[\\w-]+/[\\w-]+",
-    "skip_owners": ["solutions"],
-    "skip_repos": ["weekly", "monthly"]
-  }
-}
-
-【示例 - RSS】
-{
-  "strategy": "rss",
-  "list": {
+    "url_filters": {
+      "include": "正则表达式",
+      "exclude": ["字符串1", "字符串2"]
+    },
+    "pagination": {"type": "next-button", "selector": ".next", "max_pages": 5}
+  },
+  "detail": {
+    "fetch_mode": "dynamic",
+    "content_type": "html",
     "fields": {
-      "title": "title",
-      "link": "link",
-      "description": "description"
+      "title": {"selector": "h1", "type": "text"},
+      "content": {"selector": "article", "type": "html"},
+      "author": {"selector": ".author", "type": "text"},
+      "date": {"selector": "time", "type": "text"}
     }
   }
-}""")
-    request_config: Optional[str] = Field(default=None, description="""API请求配置，JSON格式。当render为http时使用，统一配置请求方法、认证、请求头、请求体等所有HTTP请求参数。
+}
 
-【GraphQL + Bearer Token 示例】
+【list 字段说明】
+• url: 列表页入口 URL
+• fetch_mode: 抓取方式，static（HTTP 直连）或 dynamic（Playwright 浏览器）
+• content_type: 响应格式，html/json/xml/markdown/text
+• max_items: 最大抓取数量，默认 10
+• request: HTTP 请求配置（fetch_mode=static 时使用），包含 method/auth/headers/body/timeout
+• selector: 列表项链接选择器（CSS）
+• fields: 列表项字段提取配置
+• url_filters: 链接过滤，include 白名单（正则），exclude 黑名单（字符串数组）
+• pagination: 分页配置
+
+【detail 字段说明】
+• fetch_mode: 详情页抓取方式，可与 list 不同（混合模式）
+• content_type: 详情页响应格式，默认 html
+• fields: 详情页各字段的选择器配置
+
+【示例 - 动态抓取 HTML】
 {
-  "method": "POST",
-  "auth": {"type": "bearer", "token": "your-token-here"},
-  "headers": {"Content-Type": "application/json"},
-  "body": {
-    "type": "graphql",
-    "query": "{ posts(first: 20) { edges { node { id name } } } }"
+  "list": {
+    "url": "https://example.com",
+    "fetch_mode": "dynamic",
+    "content_type": "html",
+    "max_items": 10,
+    "selector": "article.item a",
+    "url_filters": {"exclude": ["/tag/", "/sponsor/"]}
   },
-  "timeout": 30
+  "detail": {
+    "fetch_mode": "dynamic",
+    "fields": {
+      "title": {"selector": "h1", "type": "text"},
+      "content": {"selector": ".article-body", "type": "html"}
+    }
+  }
 }
 
-【REST API + Basic Auth 示例】
+【示例 - 静态抓取 GraphQL API】
 {
-  "method": "POST",
-  "auth": {"type": "basic", "username": "user", "password": "pass"},
-  "params": {"page": 1, "limit": 10},
-  "body": {"type": "json", "data": {"search": "keyword"}},
-  "timeout": 30
+  "list": {
+    "url": "https://api.example.com/graphql",
+    "fetch_mode": "static",
+    "content_type": "json",
+    "max_items": 20,
+    "request": {
+      "method": "POST",
+      "auth": {"type": "bearer", "token": "your-token"},
+      "body": {"type": "graphql", "query": "{ posts { edges { node { id title } } } }"}
+    }
+  }
 }
 
-【自定义请求头认证示例】
+【示例 - RSS 列表 + 动态详情（混合模式）】
 {
-  "method": "GET",
-  "auth": {"type": "custom", "headers": {"X-API-Key": "xxx", "Cookie": "session=abc"}},
-  "timeout": 30
-}
-
-【支持的配置项】
-• method: 请求方法 (GET/POST/PUT/DELETE)，默认 GET
-• auth.type: 认证类型 (none/bearer/basic/custom)
-• auth.token: Bearer Token
-• auth.username/password: Basic Auth 凭据
-• auth.headers: 自定义认证请求头 (dict)
-• headers: 其他非认证请求头 (dict)
-• params: URL 查询参数 (dict)
-• body.type: body 类型 (json/form/graphql/raw)
-• body.data: 请求体数据
-• body.query: GraphQL 查询语句
-• body.variables: GraphQL 变量 (dict)
-• timeout: 请求超时时间 (秒)""")
-
-    # 最大抓取数量
-    max_items: int = Field(default=10, description="最大抓取数量，默认10条")
+  "list": {
+    "url": "https://example.com/rss.xml",
+    "fetch_mode": "static",
+    "content_type": "xml",
+    "max_items": 10
+  },
+  "detail": {
+    "fetch_mode": "dynamic",
+    "fields": {"content": {"selector": ".article-body", "type": "html"}}
+  }
+}""")
 
     # 通用配置
     proxy_config: Optional[str] = Field(default=None, description="""代理配置，JSON格式。

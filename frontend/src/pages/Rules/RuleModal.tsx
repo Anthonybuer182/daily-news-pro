@@ -12,22 +12,6 @@ interface RuleModalProps {
   onSuccess: () => void
 }
 
-// 字段提示配置
-const FIELD_TIPS = {
-  name: '规则的显示名称，用于识别不同的抓取任务，例如："科技新闻头条"',
-  source_url: '列表页URL，例如：https://example.com/news',
-  max_items: '最大抓取数量，默认3条',
-  render: '渲染方式：\n• http：直接HTTP请求，速度快，适用于静态内容（XML、JSON、Markdown等）\n• browser：浏览器渲染抓取，适用于JS加载的动态页面\n\n💡 不设置时自动推断：\n• content_type 为 xml/json/markdown/text → http\n• content_type 为 html 或未设置 → browser',
-  content_type: '内容格式：\n• html：HTML 网页（默认）\n• xml：XML 格式（RSS/Atom）\n• json：JSON API 接口\n• markdown：Markdown 文件（如 GitHub README）\n• text：纯文本\n\n💡 不设置时默认 html',
-  extract_config: '两阶段抓取配置（JSON格式）：\n\n第一阶段【列表页】：\n• url：列表页URL\n• selector：文章容器选择器\n• attr：链接属性，默认 href\n• type：提取类型，attribute（默认，从属性提取）或 text（从文本提取）\n• max_items：最大抓取数量，默认3条\n• url_filters：URL过滤配置（可选）\n  - include：正则表达式，白名单匹配\n  - exclude：字符串数组，黑名单排除\n• item_fields：基本信息提取（标题、摘要、图片等）\n\n第二阶段【详情页】：\n• 访问每篇文章链接\n• 提取完整标题、内容、作者、发布时间等\n• 自动转Markdown保存\n\n【URL过滤配置示例】\n{\n  "url_filters": {\n    "include": "https://example\\.com/article/.*",\n    "exclude": ["/tag/", "/category/", "/sponsored/"]\n  }\n}',
-  delay_min: '抓取请求之间的最小等待时间（秒）\n\n设置延迟防止请求过快被封，例如设为1表示每次请求后至少等待1秒',
-  delay_max: '抓取请求之间的最大等待时间（秒）\n\n与min配合使用，随机等待min~max秒。例如1-3秒表示每次等待1-3秒',
-  user_agent: '自定义User-Agent字符串\n\n不设置则使用浏览器默认UA。可用于伪装成特定浏览器或移动端',
-  cron_expression: 'Cron定时表达式，定义自动抓取计划\n\n格式：分 时 日 月 周\n• 0 8 * * *：每天早上8点\n• */30 * * * *：每30分钟\n• 0 * * * *：每小时\n• 0 0 * * 0：每周日午夜',
-  status: '规则状态：\n• disabled：禁用，不执行定时任务\n• enabled：启用，按cron_expression定时执行',
-  proxy_config: '代理服务器配置（JSON格式）\n\n格式：{"server": "http://proxy:8080", "username": "user", "password": "pass"}\n用于需要代理访问的网站',
-}
-
 // 认证配置表单组件
 interface AuthConfigFormProps {
   authType: string
@@ -36,13 +20,9 @@ interface AuthConfigFormProps {
 }
 
 const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChange }) => {
-  const updateValue = (newValue: any) => {
-    onChange?.(newValue)
-  }
+  const updateValue = (newValue: any) => onChange?.(newValue)
 
-  if (authType === 'none') {
-    return <Text type="secondary">无需认证配置</Text>
-  }
+  if (authType === 'none') return <Text type="secondary">无需认证配置</Text>
 
   if (authType === 'basic') {
     return (
@@ -76,31 +56,12 @@ const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChan
 
   if (authType === 'custom') {
     const headersObj: Record<string, string> = value?.headers || {}
-
-    const updateHeaderValue = (key: string, val: string) => {
-      const newHeaders = { ...headersObj }
-      if (val) {
-        newHeaders[key] = val
-      } else {
-        delete newHeaders[key]
-      }
-      updateValue({ ...value, headers: newHeaders })
-    }
-
-    const addHeader = () => {
-      const newKey = `header_${Date.now()}`
-      updateValue({
-        ...value,
-        headers: { ...headersObj, [newKey]: '' }
-      })
-    }
-
+    const addHeader = () => updateValue({ ...value, headers: { ...headersObj, [`header_${Date.now()}`]: '' } })
     const removeHeader = (key: string) => {
       const newHeaders = { ...headersObj }
       delete newHeaders[key]
       updateValue({ ...value, headers: newHeaders })
     }
-
     return (
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
         {Object.entries(headersObj).map(([key, val]) => (
@@ -110,9 +71,7 @@ const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChan
               value={key}
               onChange={(e) => {
                 const newHeaders: Record<string, string> = {}
-                Object.entries(headersObj).forEach(([k, v]) => {
-                  newHeaders[k === key ? e.target.value : k] = v
-                })
+                Object.entries(headersObj).forEach(([k, v]) => { newHeaders[k === key ? e.target.value : k] = v })
                 updateValue({ ...value, headers: newHeaders })
               }}
               style={{ width: 180 }}
@@ -120,7 +79,9 @@ const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChan
             <Input
               placeholder="Value"
               value={val}
-              onChange={(e) => updateHeaderValue(key, e.target.value)}
+              onChange={(e) => {
+                updateValue({ ...value, headers: { ...headersObj, [key]: e.target.value } })
+              }}
               style={{ width: 250 }}
             />
             <Button type="text" danger onClick={() => removeHeader(key)}>删除</Button>
@@ -134,7 +95,6 @@ const AuthConfigForm: React.FC<AuthConfigFormProps> = ({ authType, value, onChan
   return null
 }
 
-// 内容类型选项
 const CONTENT_TYPE_OPTIONS = [
   { label: 'HTML', value: 'html' },
   { label: 'XML (RSS)', value: 'xml' },
@@ -143,98 +103,53 @@ const CONTENT_TYPE_OPTIONS = [
   { label: '纯文本', value: 'text' },
 ]
 
-// 渲染方式选项
 const RENDER_OPTIONS = [
-  { label: 'HTTP 直接请求', value: 'http' },
-  { label: '浏览器渲染', value: 'browser' },
+  { label: '静态抓取（HTTP）', value: 'static' },
+  { label: '动态抓取（Playwright）', value: 'dynamic' },
 ]
 
-// 翻译语言选项
 const TRANSLATION_LANGUAGE_OPTIONS = [
-  { label: '中文', value: 'zh' },
-  { label: '英文', value: 'en' },
-  { label: '日文', value: 'ja' },
-  { label: '韩文', value: 'ko' },
-  { label: '法文', value: 'fr' },
-  { label: '德文', value: 'de' },
-  { label: '西班牙文', value: 'es' },
-  { label: '俄文', value: 'ru' },
-  { label: '阿拉伯文', value: 'ar' },
-  { label: '葡萄牙文', value: 'pt' },
-  { label: '意大利文', value: 'it' },
-  { label: '越南文', value: 'vi' },
-  { label: '泰文', value: 'th' },
-  { label: '印尼文', value: 'id' },
+  { label: '中文', value: 'zh' }, { label: '英文', value: 'en' },
+  { label: '日文', value: 'ja' }, { label: '韩文', value: 'ko' },
+  { label: '法文', value: 'fr' }, { label: '德文', value: 'de' },
+  { label: '西班牙文', value: 'es' }, { label: '俄文', value: 'ru' },
+  { label: '阿拉伯文', value: 'ar' }, { label: '葡萄牙文', value: 'pt' },
+  { label: '意大利文', value: 'it' }, { label: '越南文', value: 'vi' },
+  { label: '泰文', value: 'th' }, { label: '印尼文', value: 'id' },
 ]
 
-// 翻译字段选项
 const TRANSLATION_FIELD_OPTIONS = [
   { label: '标题', value: 'title' },
   { label: '摘要', value: 'summary' },
   { label: '正文', value: 'content' },
 ]
 
-// 默认的 Playwright 配置模板（两阶段抓取）
-const DEFAULT_PLAYWRIGHT_CONFIG = {
-  list: {
-    url: '',
-    selector: '.article-item',
-    attr: 'href',
-    type: 'attribute',
-    max_items: 3,
-    // 列表中每个item的基本信息提取配置
-    item_fields: {
-      title: { selector: '.title, h3', type: 'text' },
-      summary: { selector: '.desc, .summary, p', type: 'text' },
-      image: { selector: 'img', type: 'attribute', attr: 'src' },
-      date: { selector: '.date, .time', type: 'text' },
-      author: { selector: '.author', type: 'text' }
+// 从 extract_config 中剥离系统管理字段，返回用于展示在 textarea 的剩余提取配置
+function extractDisplayConfig(extractConfig: any): string {
+  if (!extractConfig || typeof extractConfig !== 'object') return ''
+  const display: any = { ...extractConfig }
+  if (display.list) {
+    const { url: _u, fetch_mode: _fm, content_type: _ct, max_items: _m, request: _req, ...restList } = display.list
+    if (Object.keys(restList).length > 0) {
+      display.list = restList
+    } else {
+      delete display.list
     }
-  },
-  detail: {
-    title: { selector: 'h1', type: 'text' },
-    content: { selector: 'article, .content, .article-content', type: 'html' },
-    author: { selector: '.author, .name', type: 'text' },
-    date: { selector: '.date, .time, time', type: 'text' },
-    image: { selector: 'img.cover', type: 'attribute', attr: 'src' }
   }
+  return Object.keys(display).length > 0 ? JSON.stringify(display, null, 2) : ''
 }
 
-// 默认的 RSS 配置模板（合并到 extract_config）
-const DEFAULT_RSS_CONFIG = {
-  list: {
-    url: '',
-    max_items: 10
-  },
-  mapping: {
-    title: 'title',
-    link: 'link',
-    content: 'content:encoded',
-    description: 'description',
-    author: 'author',
-    date: 'pubDate'
-  }
-}
-
-// 默认的 API 配置模板（合并到 extract_config）
-const DEFAULT_API_CONFIG = {
-  list: {
-    url: '',
-    max_items: 10
-  },
-  mapping: {
-    title: 'title',
-    url: 'url',
-    content: 'body',
-    author: 'author.name',
-    date: 'created_at'
-  }
+// 从 list.request 中剥离 auth，返回用于展示在 request textarea 的剩余请求配置
+function extractRequestDisplay(request: any): string {
+  if (!request || typeof request !== 'object') return ''
+  const { auth: _a, ...rest } = request
+  return Object.keys(rest).length > 0 ? JSON.stringify(rest, null, 2) : ''
 }
 
 export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleModalProps) {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
-  const [render, setRender] = useState<string>('browser')
+  const [render, setRender] = useState<string>('dynamic')
   const [contentType, setContentType] = useState<string>('html')
   const [authType, setAuthType] = useState<string>('none')
   const [authConfigValue, setAuthConfigValue] = useState<any>(null)
@@ -254,101 +169,76 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
 
   useEffect(() => {
     if (visible && rule) {
-      form.setFieldsValue(rule)
-      setRender(rule.render || 'browser')
-      setContentType(rule.content_type || 'html')
-      // 从 request_config.auth 初始化认证配置
-      try {
-        const rc = rule.request_config
-          ? (typeof rule.request_config === 'string' ? JSON.parse(rule.request_config) : rule.request_config)
-          : {}
-        const auth = rc?.auth
-        if (auth?.type && auth.type !== 'none') {
-          setAuthType(auth.type)
-          setAuthConfigValue(auth)
-        } else {
-          setAuthType('none')
-          setAuthConfigValue(null)
-        }
-      } catch {
+      // 解析 extract_config
+      let extractConfig: any = {}
+      if (rule.extract_config) {
+        try { extractConfig = typeof rule.extract_config === 'string' ? JSON.parse(rule.extract_config) : rule.extract_config } catch { /* ignore */ }
+      }
+      const listConfig = extractConfig.list || {}
+      const requestConfig = listConfig.request || {}
+      const auth = requestConfig.auth
+
+      // 填充系统管理字段
+      form.setFieldsValue({
+        ...rule,
+        source_url: listConfig.url || '',
+        max_items: listConfig.max_items ?? 10,
+        request_config_raw: extractRequestDisplay(requestConfig),
+        extract_config_display: extractDisplayConfig(extractConfig),
+      })
+      setRender(listConfig.fetch_mode || 'dynamic')
+      setContentType(listConfig.content_type || 'html')
+
+      // 认证
+      if (auth?.type && auth.type !== 'none') {
+        setAuthType(auth.type)
+        setAuthConfigValue(auth)
+      } else {
         setAuthType('none')
         setAuthConfigValue(null)
       }
-      // 初始化翻译配置
+
+      // 翻译配置
       if (rule.translation_config) {
         try {
-          const config = typeof rule.translation_config === 'string'
-            ? JSON.parse(rule.translation_config)
-            : rule.translation_config
+          const tc = typeof rule.translation_config === 'string' ? JSON.parse(rule.translation_config) : rule.translation_config
           setTranslationFormData({
-            target_lang: config.target_lang || '',
-            source_lang: config.source_lang || '',
-            fields: config.fields || ['summary', 'content'],
-            concurrency: config.concurrency || 3,
-            generate_tags: config.generate_tags || false,
-            tag_schema: config.tag_schema || [],
-            max_tags: config.max_tags || 3,
+            target_lang: tc.target_lang || '',
+            source_lang: tc.source_lang || '',
+            fields: tc.fields || ['summary', 'content'],
+            concurrency: tc.concurrency || 3,
+            generate_tags: tc.generate_tags || false,
+            tag_schema: tc.tag_schema || [],
+            max_tags: tc.max_tags || 3,
           })
-        } catch {
-          setTranslationFormData({
-            target_lang: 'zh',
-            source_lang: '',
-            fields: ['summary', 'content'],
-            concurrency: 3,
-            generate_tags: false,
-            tag_schema: [],
-            max_tags: 3,
-          })
-        }
+        } catch { /* ignore */ }
       } else {
-        setTranslationFormData({
-          target_lang: 'zh',
-          source_lang: '',
-          fields: ['summary', 'content'],
-          concurrency: 3,
-          generate_tags: false,
-          tag_schema: [],
-          max_tags: 3,
-        })
+        resetTranslation()
       }
-      // 获取有效的标签配置
       fetchEffectiveTagConfig()
     } else if (visible) {
       form.resetFields()
-      setRender('browser')
+      setRender('dynamic')
       setContentType('html')
       setAuthType('none')
       setAuthConfigValue(null)
-      setTranslationFormData({
-        target_lang: 'zh',
-        source_lang: '',
-        fields: ['summary', 'content'],
-        concurrency: 3,
-        generate_tags: false,
-        tag_schema: [],
-        max_tags: 3,
-      })
-      form.setFieldsValue({
-        render: 'browser',
-        content_type: 'html',
-        delay_min: 1,
-        delay_max: 3,
-        status: 'disabled',
-      })
-      // 获取有效的标签配置
+      resetTranslation()
+      form.setFieldsValue({ delay_min: 1, delay_max: 3, status: 'disabled', max_items: 10 })
       fetchEffectiveTagConfig()
     }
   }, [visible, rule])
 
-  // 获取规则的有效标签配置
+  const resetTranslation = () => setTranslationFormData({
+    target_lang: 'zh', source_lang: '', fields: ['summary', 'content'],
+    concurrency: 3, generate_tags: false, tag_schema: [], max_tags: 3,
+  })
+
   const fetchEffectiveTagConfig = async () => {
     if (rule) {
       try {
         const res = await getRuleEffectiveTagSchema(rule.id)
         setEffectiveTagConfig(res.data)
-      } catch (error) {
-        console.error('获取标签配置失败', error)
-      }
+      } catch { /* ignore */ }
     }
   }
 
@@ -356,50 +246,55 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     try {
       const values = await form.validateFields()
 
-      // 将 auth 状态合并进 request_config.auth
-      if (authType && authType !== 'none') {
-        let rc: any = {}
-        if (values.request_config) {
-          try { rc = JSON.parse(values.request_config) } catch { /* ignore */ }
-        }
+      // 构建 extract_config：将系统管理字段合并进 list
+      let extractConfig: any = {}
+      try { extractConfig = JSON.parse(values.extract_config_display || '{}') } catch { /* ignore */ }
+
+      extractConfig.list = extractConfig.list || {}
+      extractConfig.list.url = values.source_url
+      extractConfig.list.fetch_mode = render
+      extractConfig.list.content_type = contentType
+      extractConfig.list.max_items = values.max_items
+
+      // 构建 request：raw 配置 + auth
+      let reqConfig: any = {}
+      try { reqConfig = JSON.parse(values.request_config_raw || '{}') } catch { /* ignore */ }
+      if (authType !== 'none') {
         const auth: any = { type: authType }
-        if (authType === 'bearer') {
-          auth.token = authConfigValue?.token || ''
-        } else if (authType === 'basic') {
-          auth.username = authConfigValue?.username || ''
-          auth.password = authConfigValue?.password || ''
-        } else if (authType === 'custom') {
-          auth.headers = authConfigValue?.headers || {}
-        }
-        rc.auth = auth
-        values.request_config = JSON.stringify(rc)
+        if (authType === 'bearer') auth.token = authConfigValue?.token || ''
+        else if (authType === 'basic') { auth.username = authConfigValue?.username || ''; auth.password = authConfigValue?.password || '' }
+        else if (authType === 'custom') auth.headers = authConfigValue?.headers || {}
+        reqConfig.auth = auth
       } else {
-        // 无认证时，确保移除 request_config 中的 auth 字段
-        if (values.request_config) {
-          try {
-            const rc = JSON.parse(values.request_config)
-            delete rc.auth
-            values.request_config = JSON.stringify(rc)
-          } catch { /* ignore */ }
-        }
+        delete reqConfig.auth
+      }
+      if (Object.keys(reqConfig).length > 0) {
+        extractConfig.list.request = reqConfig
+      } else {
+        delete extractConfig.list.request
       }
 
-      // 处理翻译配置 - 选择目标语言即启用翻译
+      values.extract_config = JSON.stringify(extractConfig)
+
+      // 翻译配置
       if (translationFormData.target_lang) {
-        const transConfig: any = {
+        values.translation_config = JSON.stringify({
           target_lang: translationFormData.target_lang,
           source_lang: translationFormData.source_lang,
           fields: translationFormData.fields,
           concurrency: translationFormData.concurrency,
-        }
-        // 如果启用了打标签
-        if (translationFormData.generate_tags) {
-          transConfig.generate_tags = true
-        }
-        values.translation_config = JSON.stringify(transConfig)
+          ...(translationFormData.generate_tags ? { generate_tags: true } : {}),
+        })
       } else {
         values.translation_config = undefined
       }
+
+      // 清理不需要提交的临时字段
+      delete values.source_url
+      delete values.max_items
+      delete values.request_config_raw
+      delete values.extract_config_display
+
       setLoading(true)
       if (rule) {
         await updateRule(rule.id, values)
@@ -416,113 +311,14 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
 
   const handleRenderChange = (value: string) => {
     setRender(value)
-    form.setFieldValue('render', value)
-    // browser 模式只支持 HTML，切换时重置 content_type
-    if (value === 'browser') {
+    if (value === 'dynamic') {
       setContentType('html')
-      form.setFieldValue('content_type', 'html')
     }
   }
 
   const handleContentTypeChange = (value: string) => {
     setContentType(value)
-    form.setFieldValue('content_type', value)
-    // content_type 不再影响 render，两个字段各自独立
   }
-
-  // 填充默认配置
-  const fillDefaultConfig = (type: string) => {
-    if (type === 'playwright' || type === 'browser') {
-      form.setFieldValue('extract_config', JSON.stringify(DEFAULT_PLAYWRIGHT_CONFIG, null, 2))
-    } else if (type === 'rss' || type === 'xml') {
-      form.setFieldValue('extract_config', JSON.stringify(DEFAULT_RSS_CONFIG, null, 2))
-    } else if (type === 'api' || type === 'json') {
-      form.setFieldValue('extract_config', JSON.stringify(DEFAULT_API_CONFIG, null, 2))
-    }
-  }
-
-  // 渲染 HTML/Markdown 配置
-  const renderHtmlFields = () => (
-    <>
-      <Form.Item
-        name="extract_config"
-        label="抓取配置 (JSON)"
-        tooltip={FIELD_TIPS.extract_config}
-      >
-        <TextArea
-          rows={12}
-          style={{ fontFamily: 'monospace' }}
-          placeholder={JSON.stringify(DEFAULT_PLAYWRIGHT_CONFIG, null, 2)}
-        />
-      </Form.Item>
-
-      <Space>
-        <Button type="link" onClick={() => fillDefaultConfig('browser')}>
-          填充默认配置
-        </Button>
-      </Space>
-    </>
-  )
-
-  // 渲染 XML/RSS 配置
-  const renderXmlFields = () => (
-    <>
-      <Form.Item
-        name="extract_config"
-        label="抓取配置"
-        tooltip="包含字段映射和最大抓取数量配置"
-      >
-        <TextArea
-          rows={8}
-          placeholder={JSON.stringify(DEFAULT_RSS_CONFIG, null, 2)}
-          style={{ fontFamily: 'monospace' }}
-        />
-      </Form.Item>
-      <Button type="link" onClick={() => fillDefaultConfig('xml')}>
-        填充默认配置
-      </Button>
-    </>
-  )
-
-  // 渲染 JSON API 配置
-  const renderJsonFields = () => (
-    <>
-      <Form.Item
-        name="extract_config"
-        label="抓取配置"
-        tooltip="包含字段映射和最大抓取数量配置"
-      >
-        <TextArea
-          rows={8}
-          placeholder={JSON.stringify(DEFAULT_API_CONFIG, null, 2)}
-          style={{ fontFamily: 'monospace' }}
-        />
-      </Form.Item>
-      <Button type="link" onClick={() => fillDefaultConfig('json')}>
-        填充默认配置
-      </Button>
-    </>
-  )
-
-  // 渲染 Markdown 配置
-  const renderMarkdownFields = () => (
-    <>
-      <Form.Item
-        name="extract_config"
-        label="抓取配置"
-        tooltip="包含 list.url 等配置"
-      >
-        <TextArea
-          rows={4}
-          placeholder='{"list": {"url": "https://raw.githubusercontent.com/.../README.md"}}'
-          style={{ fontFamily: 'monospace' }}
-        />
-      </Form.Item>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-        用于提取 GitHub README 等 Markdown 文件中的链接
-      </Text>
-    </>
-  )
 
   return (
     <Modal
@@ -534,21 +330,17 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       width={700}
     >
       <Form form={form} layout="vertical">
-        <Form.Item
-          name="name"
-          label="规则名称"
-          tooltip={FIELD_TIPS.name}
-          rules={[{ required: true, message: '请输入规则名称' }]}
-        >
+        {/* ── 基本信息 ── */}
+        <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
           <Input placeholder="给规则起个名字，如：科技新闻头条" />
         </Form.Item>
 
-        <Form.Item
-          name="render"
-          label="渲染方式"
-          tooltip={FIELD_TIPS.render}
-          rules={[{ required: true, message: '请选择渲染方式' }]}
-        >
+        <Form.Item name="source_url" label="来源 URL" rules={[{ required: true, message: '请输入来源 URL' }]}>
+          <Input placeholder="https://example.com/news" />
+        </Form.Item>
+
+        {/* ── 抓取方式 ── */}
+        <Form.Item label="抓取方式" required>
           <Segmented
             options={RENDER_OPTIONS}
             value={render}
@@ -556,91 +348,92 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        <Form.Item
-          name="content_type"
-          label="内容格式"
-          tooltip={FIELD_TIPS.content_type}
-          rules={[{ required: true, message: '请选择内容格式' }]}
-        >
+        <Form.Item label="内容格式" required>
           <Segmented
-            options={render === 'http' ? CONTENT_TYPE_OPTIONS : [{ label: 'HTML', value: 'html' }]}
+            options={render === 'static' ? CONTENT_TYPE_OPTIONS : [{ label: 'HTML', value: 'html' }]}
             value={contentType}
             onChange={(value) => handleContentTypeChange(value as string)}
           />
         </Form.Item>
 
-        <Form.Item
-          name="source_url"
-          label="来源 URL"
-          tooltip={FIELD_TIPS.source_url}
-          rules={[{ required: true, message: '请输入来源 URL' }]}
-        >
-          <Input placeholder="https://example.com/news" />
-        </Form.Item>
-
-        <Form.Item
-          name="max_items"
-          label="最大抓取数量"
-          tooltip={FIELD_TIPS.max_items}
-        >
+        <Form.Item name="max_items" label="最大抓取数量">
           <InputNumber min={1} max={500} />
         </Form.Item>
 
-        {contentType === 'html' && renderHtmlFields()}
-        {contentType === 'xml' && renderXmlFields()}
-        {contentType === 'json' && renderJsonFields()}
-        {contentType === 'markdown' && renderMarkdownFields()}
-
+        {/* ── 提取配置（选择器、字段映射等） ── */}
         <Form.Item
-          name="status"
-          label="规则状态"
-          tooltip={FIELD_TIPS.status}
+          name="extract_config_display"
+          label="提取配置 (JSON)"
+          tooltip="配置列表项选择器、详情页字段提取等。URL/抓取方式/内容格式/请求配置由上方表单管理，无需在此重复填写。"
         >
-          <Select
-            options={[
-              { label: '禁用', value: 'disabled' },
-              { label: '启用', value: 'enabled' },
-            ]}
+          <TextArea
+            rows={10}
+            style={{ fontFamily: 'monospace' }}
+            placeholder={`{\n  "list": {\n    "selector": "article a",\n    "url_filters": {"exclude": ["/tag/"]}\n  },\n  "detail": {\n    "fetch_mode": "dynamic",\n    "fields": {\n      "title": {"selector": "h1", "type": "text"},\n      "content": {"selector": "article", "type": "html"}\n    }\n  }\n}`}
           />
         </Form.Item>
 
-        <Form.Item
-          name="cron_expression"
-          label="定时表达式"
-          tooltip={FIELD_TIPS.cron_expression}
-        >
+        {/* ── HTTP 请求配置（仅 fetch_mode=static 时需要） ── */}
+        {render === 'static' && (
+          <>
+            <Form.Item
+              name="request_config_raw"
+              label="请求配置 (JSON)"
+              tooltip="HTTP 请求的方法、请求头、请求体、超时等。认证信息通过下方认证字段配置。"
+            >
+              <TextArea
+                rows={5}
+                style={{ fontFamily: 'monospace' }}
+                placeholder={`{\n  "method": "POST",\n  "headers": {"Content-Type": "application/json"},\n  "body": {"type": "graphql", "query": "..."},\n  "timeout": 30\n}`}
+              />
+            </Form.Item>
+
+            <Form.Item label="认证类型">
+              <Select
+                value={authType}
+                onChange={(value) => { setAuthType(value); setAuthConfigValue(null) }}
+                options={[
+                  { label: '无认证', value: 'none' },
+                  { label: 'Basic认证', value: 'basic' },
+                  { label: 'Bearer Token', value: 'bearer' },
+                  { label: '自定义', value: 'custom' },
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item label="认证配置">
+              <AuthConfigForm
+                authType={authType}
+                value={authConfigValue}
+                onChange={(val) => setAuthConfigValue(val)}
+              />
+            </Form.Item>
+          </>
+        )}
+
+        {/* ── 定时与调度 ── */}
+        <Form.Item name="status" label="规则状态">
+          <Select options={[{ label: '禁用', value: 'disabled' }, { label: '启用', value: 'enabled' }]} />
+        </Form.Item>
+
+        <Form.Item name="cron_expression" label="定时表达式">
           <Input placeholder="0 8 * * *" />
         </Form.Item>
 
-        <Form.Item
-          name="delay_min"
-          label="最小延迟(秒)"
-          tooltip={FIELD_TIPS.delay_min}
-        >
+        {/* ── 网络配置 ── */}
+        <Form.Item name="delay_min" label="最小延迟(秒)">
           <InputNumber min={0} />
         </Form.Item>
 
-        <Form.Item
-          name="delay_max"
-          label="最大延迟(秒)"
-          tooltip={FIELD_TIPS.delay_max}
-        >
+        <Form.Item name="delay_max" label="最大延迟(秒)">
           <InputNumber min={0} />
         </Form.Item>
 
-        <Form.Item
-          name="user_agent"
-          label="User-Agent"
-          tooltip={FIELD_TIPS.user_agent}
-        >
+        <Form.Item name="user_agent" label="User-Agent">
           <Input placeholder="不设置则使用浏览器默认UA" />
         </Form.Item>
 
-        <Form.Item
-          name="proxy_config"
-          label="代理配置"
-          tooltip={FIELD_TIPS.proxy_config}
-        >
+        <Form.Item name="proxy_config" label="代理配置">
           <TextArea
             rows={2}
             placeholder='{"server": "http://proxy:8080"}'
@@ -648,35 +441,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        <Form.Item label="认证类型">
-          <Select
-            value={authType}
-            onChange={(value) => {
-              setAuthType(value)
-              setAuthConfigValue(null)
-            }}
-            options={[
-              { label: '无认证', value: 'none' },
-              { label: 'Basic认证', value: 'basic' },
-              { label: 'Bearer Token', value: 'bearer' },
-              { label: '自定义', value: 'custom' },
-            ]}
-          />
-        </Form.Item>
-
-        <Form.Item label="认证配置">
-          <AuthConfigForm
-            authType={authType}
-            value={authConfigValue}
-            onChange={(val) => setAuthConfigValue(val)}
-          />
-        </Form.Item>
-
-        {/* 翻译配置 */}
-        <Form.Item
-          label="翻译"
-          tooltip="对抓取的摘要、正文等内容进行翻译"
-        >
+        {/* ── 翻译配置 ── */}
+        <Form.Item label="翻译" tooltip="对抓取的摘要、正文等内容进行翻译">
           <Space direction="vertical" size="small">
             <Select
               value={translationFormData.target_lang}
@@ -691,26 +457,22 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                 <Select
                   value={translationFormData.source_lang}
                   onChange={(value) => setTranslationFormData(prev => ({ ...prev, source_lang: value }))}
-                  options={[
-                    { label: '自动检测', value: '' },
-                    ...TRANSLATION_LANGUAGE_OPTIONS
-                  ]}
+                  options={[{ label: '自动检测', value: '' }, ...TRANSLATION_LANGUAGE_OPTIONS]}
                   placeholder="源语言（留空自动检测）"
                   style={{ width: 200 }}
                   allowClear
                 />
                 <Checkbox.Group
                   value={translationFormData.fields}
-                  onChange={(checkedValues) => setTranslationFormData(prev => ({ ...prev, fields: checkedValues as string[] }))}
+                  onChange={(v) => setTranslationFormData(prev => ({ ...prev, fields: v as string[] }))}
                   options={TRANSLATION_FIELD_OPTIONS}
                 />
                 <Space>
                   <span>并发数：</span>
                   <InputNumber
-                    min={1}
-                    max={10}
+                    min={1} max={10}
                     value={translationFormData.concurrency}
-                    onChange={(value) => setTranslationFormData(prev => ({ ...prev, concurrency: value || 3 }))}
+                    onChange={(v) => setTranslationFormData(prev => ({ ...prev, concurrency: v || 3 }))}
                     style={{ width: 80 }}
                   />
                   <span style={{ color: '#999' }}>1-10，避免限流</span>
@@ -718,7 +480,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
 
                 <Divider style={{ margin: '8px 0' }} />
 
-                {/* 标签配置 */}
                 <Space>
                   <span>自动打标签：</span>
                   <Switch
@@ -732,7 +493,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   )}
                 </Space>
 
-                {translationFormData.generate_tags && translationFormData.target_lang && (
+                {translationFormData.generate_tags && (
                   <div style={{ marginLeft: 24, marginTop: 8 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       标签池：{effectiveTagConfig.tag_schema.length > 0

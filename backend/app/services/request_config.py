@@ -140,22 +140,3 @@ class RequestConfigManager:
 
         return proxy
 
-    @classmethod
-    def get_unused_config_warning(cls, rule_name: str, fields: list) -> Optional[str]:
-        """
-        检查未使用的配置字段并返回警告信息
-
-        Args:
-            rule_name: 规则名称
-            fields: 未使用的配置字段列表
-
-        Returns:
-            str: 警告信息 或 None
-        """
-        if not fields:
-            return None
-
-        return (
-            f"规则 '{rule_name}' 中以下配置字段未使用: {', '.join(fields)}。"
-            f"请使用 request_config 字段来配置这些选项。"
-        )

@@ -88,7 +88,12 @@ def get_articles(
     # Add rule_render and rule_name to each article
     for article in articles:
         if article.rule:
-            article.rule_render = article.rule.render
+            try:
+                import json as _json
+                ec = _json.loads(article.rule.extract_config or '{}')
+                article.rule_render = ec.get('list', {}).get('fetch_mode', 'dynamic')
+            except Exception:
+                article.rule_render = 'dynamic'
             article.rule_name = article.rule.name
 
     from app.schemas import Article as ArticleSchema
