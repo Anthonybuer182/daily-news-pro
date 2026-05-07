@@ -91,31 +91,38 @@ class PlaywrightCrawler:
     async def __aenter__(self):
         self.playwright = await async_playwright().start()
 
-        # 增强反检测配置
-        default_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0"
+        # 使用 Chromium（兼容性最好，反爬工具链成熟）
+        default_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-        # 先尝试Firefox（更稳定）
         try:
-            launch_options_ff = {
+            launch_options = {
                 "headless": True,
                 "args": [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--window-size=1920,1080",
+                    "--start-maximized",
                     "--disable-extensions",
                     "--disable-plugins",
+                    "--disable-default-apps",
                     "--disable-background-networking",
                     "--disable-sync",
                     "--metrics-recording-only",
                     "--mute-audio",
                     "--no-first-run",
                 ],
+                "ignore_default_args": ["--enable-automation", "--headless"],
             }
-            browser_type = self.playwright.firefox
-            self.browser = await browser_type.launch(**launch_options_ff)
+            if self.proxy:
+                launch_options["proxy"] = {"server": self.proxy}
 
-            # 创建 context 并添加反检测设置
+            self.browser = await self.playwright.chromium.launch(**launch_options)
+
             self.context = await self.browser.new_context(
                 user_agent=self.user_agent or default_ua,
                 viewport={'width': 1920, 'height': 1080},
@@ -126,62 +133,15 @@ class PlaywrightCrawler:
                 }
             )
 
-            # 为 Firefox 添加反检测脚本
-            ff_page = await self.context.new_page()
-            await ff_page.add_init_script(build_stealth_script())
-            await ff_page.close()
+            # 添加反检测脚本
+            page = await self.context.new_page()
+            await page.add_init_script(build_stealth_script())
+            await page.close()
 
         except Exception as e:
-            # Firefox失败，尝试Chromium
-            try:
-                launch_options = {
-                    "headless": True,
-                    "args": [
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-gpu",
-                        "--disable-web-security",
-                        "--disable-blink-features=AutomationControlled",
-                        "--disable-features=IsolateOrigins,site-per-process",
-                        "--window-size=1920,1080",
-                        "--start-maximized",
-                        "--disable-extensions",
-                        "--disable-plugins",
-                        "--disable-default-apps",
-                        "--disable-background-networking",
-                        "--disable-default-fonts",
-                        "--disable-sync",
-                        "--metrics-recording-only",
-                        "--mute-audio",
-                        "--no-first-run",
-                    ],
-                    "ignore_default_args": ["--enable-automation", "--headless"],
-                }
-                if self.user_agent:
-                    launch_options["user_agent"] = self.user_agent
-                if self.proxy:
-                    launch_options["proxy"] = {"server": self.proxy}
-
-                browser_type = self.playwright.chromium
-                self.browser = await browser_type.launch(**launch_options)
-
-                # 创建 context
-                self.context = await self.browser.new_context(
-                    user_agent=self.user_agent or default_ua,
-                    viewport={'width': 1920, 'height': 1080},
-                )
-
-                # 添加反检测脚本
-                page = await self.context.new_page()
-                await page.add_init_script(build_stealth_script())
-                await page.close()
-
-            except Exception as e2:
-                # 都失败，抛出异常
-                if self.playwright:
-                    await self.playwright.stop()
-                raise RuntimeError(f"Failed to launch browsers: {e}, {e2}")
+            if self.playwright:
+                await self.playwright.stop()
+            raise RuntimeError(f"Failed to launch Chromium: {e}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
