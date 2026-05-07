@@ -257,23 +257,21 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       form.setFieldsValue(rule)
       setRender(rule.render || 'browser')
       setContentType(rule.content_type || 'html')
-      setAuthType(rule.auth_type || 'none')
-      // 初始化认证配置
-      if (rule.auth_config) {
-        try {
-          const config = typeof rule.auth_config === 'string'
-            ? JSON.parse(rule.auth_config)
-            : rule.auth_config
-          if (rule.auth_type === 'custom' && config?.headers && typeof config.headers === 'object') {
-            const headersArray = Object.entries(config.headers).map(([key, value]) => ({ key, value: value as string }))
-            setAuthConfigValue({ ...config, headers: headersArray })
-          } else {
-            setAuthConfigValue(config)
-          }
-        } catch {
+      // 从 request_config.auth 初始化认证配置
+      try {
+        const rc = rule.request_config
+          ? (typeof rule.request_config === 'string' ? JSON.parse(rule.request_config) : rule.request_config)
+          : {}
+        const auth = rc?.auth
+        if (auth?.type && auth.type !== 'none') {
+          setAuthType(auth.type)
+          setAuthConfigValue(auth)
+        } else {
+          setAuthType('none')
           setAuthConfigValue(null)
         }
-      } else {
+      } catch {
+        setAuthType('none')
         setAuthConfigValue(null)
       }
       // 初始化翻译配置
@@ -319,6 +317,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
       form.resetFields()
       setRender('browser')
       setContentType('html')
+      setAuthType('none')
+      setAuthConfigValue(null)
       setTranslationFormData({
         target_lang: 'zh',
         source_lang: '',
@@ -356,6 +356,33 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     try {
       const values = await form.validateFields()
 
+      // 将 auth 状态合并进 request_config.auth
+      if (authType && authType !== 'none') {
+        let rc: any = {}
+        if (values.request_config) {
+          try { rc = JSON.parse(values.request_config) } catch { /* ignore */ }
+        }
+        const auth: any = { type: authType }
+        if (authType === 'bearer') {
+          auth.token = authConfigValue?.token || ''
+        } else if (authType === 'basic') {
+          auth.username = authConfigValue?.username || ''
+          auth.password = authConfigValue?.password || ''
+        } else if (authType === 'custom') {
+          auth.headers = authConfigValue?.headers || {}
+        }
+        rc.auth = auth
+        values.request_config = JSON.stringify(rc)
+      } else {
+        // 无认证时，确保移除 request_config 中的 auth 字段
+        if (values.request_config) {
+          try {
+            const rc = JSON.parse(values.request_config)
+            delete rc.auth
+            values.request_config = JSON.stringify(rc)
+          } catch { /* ignore */ }
+        }
+      }
 
       // 处理翻译配置 - 选择目标语言即启用翻译
       if (translationFormData.target_lang) {
@@ -622,12 +649,13 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        <Form.Item
-          name="auth_type"
-          label="认证类型"
-        >
+        <Form.Item label="认证类型">
           <Select
-            onChange={(value) => setAuthType(value)}
+            value={authType}
+            onChange={(value) => {
+              setAuthType(value)
+              setAuthConfigValue(null)
+            }}
             options={[
               { label: '无认证', value: 'none' },
               { label: 'Basic认证', value: 'basic' },
@@ -641,10 +669,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           <AuthConfigForm
             authType={authType}
             value={authConfigValue}
-            onChange={(val) => {
-              setAuthConfigValue(val)
-              form.setFieldValue('auth_config', val ? JSON.stringify(val) : undefined)
-            }}
+            onChange={(val) => setAuthConfigValue(val)}
           />
         </Form.Item>
 

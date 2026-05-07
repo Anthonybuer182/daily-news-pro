@@ -64,47 +64,46 @@ class RequestConfigManager:
             elif body_type == "raw":
                 kwargs["content"] = body_config.get("data", "").encode("utf-8")
 
+        # 应用认证（从 config.auth 读取）
+        if "auth" in config:
+            kwargs = cls.apply_auth(kwargs, config["auth"])
+
         return kwargs
 
     @classmethod
-    def apply_auth(
-        cls,
-        kwargs: dict,
-        auth_type: str,
-        auth_config: Optional[dict]
-    ) -> dict:
+    def apply_auth(cls, kwargs: dict, auth: dict) -> dict:
         """
         应用认证配置
 
         Args:
             kwargs: 请求参数字典
-            auth_type: 认证类型 (bearer/basic/custom)
-            auth_config: 认证配置
+            auth: 认证配置，包含 type 及对应字段
+                  {"type": "bearer", "token": "xxx"}
+                  {"type": "basic", "username": "u", "password": "p"}
+                  {"type": "custom", "headers": {"X-Key": "val"}}
 
         Returns:
             dict: 更新后的请求参数
         """
-        if not auth_config:
+        auth_type = auth.get("type", "none").lower()
+        if auth_type == "none":
             return kwargs
 
-        auth_type = auth_type.lower()
         headers = kwargs.get("headers", {})
 
         if auth_type == "bearer":
-            token = auth_config.get("token", "")
+            token = auth.get("token", "")
             if token:
                 headers["Authorization"] = f"Bearer {token}"
         elif auth_type == "basic":
-            # HTTP Basic 认证
-            username = auth_config.get("username", "")
-            password = auth_config.get("password", "")
+            username = auth.get("username", "")
+            password = auth.get("password", "")
             if username:
                 credentials = f"{username}:{password}"
                 encoded = base64.b64encode(credentials.encode()).decode()
                 headers["Authorization"] = f"Basic {encoded}"
         elif auth_type == "custom":
-            # 自定义请求头（支持多个）
-            custom_headers = auth_config.get("headers", {})
+            custom_headers = auth.get("headers", {})
             if isinstance(custom_headers, dict):
                 for header_name, header_value in custom_headers.items():
                     if header_name and header_value:

@@ -107,36 +107,44 @@ class RuleBase(BaseModel):
     }
   }
 }""")
-    request_config: Optional[str] = Field(default=None, description="""API请求配置，JSON格式。当render为http时使用，可配置请求方法、参数、认证等。
+    request_config: Optional[str] = Field(default=None, description="""API请求配置，JSON格式。当render为http时使用，统一配置请求方法、认证、请求头、请求体等所有HTTP请求参数。
 
-【完整配置示例 - GraphQL】
+【GraphQL + Bearer Token 示例】
 {
   "method": "POST",
-  "headers": {"X-Custom-Header": "value"},
+  "auth": {"type": "bearer", "token": "your-token-here"},
+  "headers": {"Content-Type": "application/json"},
   "body": {
     "type": "graphql",
-    "query": "{ posts(first: 20) { edges { node { id name tagline } } } }",
-    "variables": {"postedAfter": "2026-03-20T00:00:00Z"}
+    "query": "{ posts(first: 20) { edges { node { id name } } } }"
   },
   "timeout": 30
 }
 
-【REST API POST 示例】
+【REST API + Basic Auth 示例】
 {
   "method": "POST",
+  "auth": {"type": "basic", "username": "user", "password": "pass"},
   "params": {"page": 1, "limit": 10},
-  "headers": {"Content-Type": "application/json"},
-  "body": {
-    "type": "json",
-    "data": {"search": "keyword", "filters": {"category": "news"}}
-  },
+  "body": {"type": "json", "data": {"search": "keyword"}},
+  "timeout": 30
+}
+
+【自定义请求头认证示例】
+{
+  "method": "GET",
+  "auth": {"type": "custom", "headers": {"X-API-Key": "xxx", "Cookie": "session=abc"}},
   "timeout": 30
 }
 
 【支持的配置项】
 • method: 请求方法 (GET/POST/PUT/DELETE)，默认 GET
+• auth.type: 认证类型 (none/bearer/basic/custom)
+• auth.token: Bearer Token
+• auth.username/password: Basic Auth 凭据
+• auth.headers: 自定义认证请求头 (dict)
+• headers: 其他非认证请求头 (dict)
 • params: URL 查询参数 (dict)
-• headers: 自定义请求头 (dict)
 • body.type: body 类型 (json/form/graphql/raw)
 • body.data: 请求体数据
 • body.query: GraphQL 查询语句
@@ -147,17 +155,6 @@ class RuleBase(BaseModel):
     max_items: int = Field(default=10, description="最大抓取数量，默认10条")
 
     # 通用配置
-    auth_type: str = Field(default="none", description="认证类型：none(无认证)、basic(HTTP Basic)、bearer(Bearer Token)、custom(自定义请求头)")
-    auth_config: Optional[str] = Field(default=None, description="""认证配置，JSON格式。根据auth_type配置用户名密码或Token等。
-
-【Bearer Token 示例】
-{"type": "bearer", "token": "your-token-here"}
-
-【Basic Auth 示例】
-{"type": "basic", "username": "user", "password": "pass"}
-
-【自定义请求头示例】
-{"type": "custom", "headers": {"Authorization": "Bearer xxx", "Cookie": "name=value", "Referer": "https://example.com"}}""")
     proxy_config: Optional[str] = Field(default=None, description="""代理配置，JSON格式。
 
 【示例 - 无认证代理】

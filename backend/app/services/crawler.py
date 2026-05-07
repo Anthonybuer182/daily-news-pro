@@ -205,16 +205,6 @@ class CrawlerEngine:
         except:
             return {}
 
-    def _get_auth_config(self) -> Optional[Dict]:
-        """获取认证配置"""
-        if not self.rule.auth_config:
-            return None
-
-        try:
-            return json.loads(self.rule.auth_config)
-        except:
-            return None
-
     def _get_proxy_config(self) -> Optional[Dict]:
         """获取代理配置"""
         if not self.rule.proxy_config:
@@ -299,29 +289,9 @@ class CrawlerEngine:
                 )
                 self._log("info", f"Using today date: {today} for GraphQL query")
 
-            # 应用认证
-            auth_type = self.rule.auth_type
-            if auth_type and auth_type != "none":
-                auth_config = self._get_auth_config()
-                kwargs = RequestConfigManager.apply_auth(kwargs, auth_type, auth_config)
-
             # 获取代理配置
             proxy_config = self._get_proxy_config()
             proxy = RequestConfigManager.apply_proxy(proxy_config)
-
-            # 检查未使用的旧配置字段
-            unused_fields = []
-            if self.rule.auth_config and not request_config:
-                unused_fields.extend(["auth_config"])
-            if self.rule.proxy_config and not request_config:
-                unused_fields.extend(["proxy_config"])
-
-            if unused_fields:
-                warning = RequestConfigManager.get_unused_config_warning(
-                    self.rule.name, unused_fields
-                )
-                if warning:
-                    self._log("warning", warning)
 
             # 执行 HTTP 请求
             response_text = await self._execute_http_request(kwargs, proxy)
