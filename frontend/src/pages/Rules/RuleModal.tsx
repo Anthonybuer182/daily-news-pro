@@ -417,10 +417,8 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleRenderChange = (value: string) => {
     setRender(value)
     form.setFieldValue('render', value)
-    if (value === 'http') {
-      setContentType('html')
-      form.setFieldValue('content_type', 'html')
-    } else {
+    // browser 模式只支持 HTML，切换时重置 content_type
+    if (value === 'browser') {
       setContentType('html')
       form.setFieldValue('content_type', 'html')
     }
@@ -429,10 +427,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   const handleContentTypeChange = (value: string) => {
     setContentType(value)
     form.setFieldValue('content_type', value)
-    if (value === 'xml' || value === 'json' || value === 'markdown' || value === 'text') {
-      setRender('http')
-      form.setFieldValue('render', 'http')
-    }
+    // content_type 不再影响 render，两个字段各自独立
   }
 
   // 填充默认配置
@@ -549,8 +544,10 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         </Form.Item>
 
         <Form.Item
+          name="render"
           label="渲染方式"
           tooltip={FIELD_TIPS.render}
+          rules={[{ required: true, message: '请选择渲染方式' }]}
         >
           <Segmented
             options={RENDER_OPTIONS}
@@ -560,8 +557,10 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         </Form.Item>
 
         <Form.Item
+          name="content_type"
           label="内容格式"
           tooltip={FIELD_TIPS.content_type}
+          rules={[{ required: true, message: '请选择内容格式' }]}
         >
           <Segmented
             options={render === 'http' ? CONTENT_TYPE_OPTIONS : [{ label: 'HTML', value: 'html' }]}

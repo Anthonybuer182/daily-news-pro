@@ -21,36 +21,12 @@ class Rule(Base):
     content_type = Column(String(20), nullable=True)
 
     def get_render(self) -> str:
-        """
-        获取有效的渲染方式（自动推断逻辑）
-
-        推断优先级:
-        1. 如果 render 已设置，直接使用
-        2. 根据 content_type 推断
-        """
-        # 1. 优先使用新字段
-        if self.render:
-            return self.render
-
-        # 2. 根据 content_type 推断
-        ct = self.content_type or ""
-        if ct in ("xml", "json", "markdown", "text"):
-            return "http"
-        return "browser"  # HTML 默认需要浏览器渲染
+        """获取渲染方式，未设置时默认 browser"""
+        return self.render or "browser"
 
     def get_content_type(self) -> str:
-        """
-        获取有效的内容类型（自动推断逻辑）
-
-        推断优先级:
-        1. 如果 content_type 已设置，直接使用
-        2. 默认返回 html
-        """
-        # 1. 优先使用新字段
-        if self.content_type:
-            return self.content_type
-
-        return "html"  # 默认 HTML
+        """获取内容格式，未设置时默认 html"""
+        return self.content_type or "html"
 
     # ============ 通用配置字段 (JSON 格式) ============
     # extract_config: Playwright 抓取配置 (替换原有的分散选择器字段)
