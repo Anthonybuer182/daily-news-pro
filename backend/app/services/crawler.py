@@ -802,22 +802,24 @@ class CrawlerEngine:
 
     async def _extract_api_item(self, item: Dict, field_mapping: Dict) -> Optional[Article]:
         """从 API 响应中提取文章"""
-        # 获取字段映射
-        title_field = field_mapping.get("title", "title")
-        url_field = field_mapping.get("url", "url") or field_mapping.get("link", "link") or field_mapping.get("html_url", "html_url")
-        content_field = field_mapping.get("description") or field_mapping.get("content", "content") or field_mapping.get("body", "body")
-        author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
-        date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
-        image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
-        images_spec = field_mapping.get("images")
+        # 获取字段映射（key = 文章字段名，value = API 响应字段名）
+        title_field   = field_mapping.get("title", "title")
+        url_field     = field_mapping.get("url", "url") or field_mapping.get("link", "link") or field_mapping.get("html_url", "html_url")
+        summary_field = field_mapping.get("summary")                      # 配置了才读，否则 fallback 到 content 截断
+        content_field = field_mapping.get("content", "content") or field_mapping.get("body", "body")
+        author_field  = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
+        date_field    = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
+        image_field   = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
+        images_spec   = field_mapping.get("images")
 
         # 提取字段
-        title = self._get_nested_field(item, title_field)
-        url = self._get_nested_field(item, url_field)
+        title   = self._get_nested_field(item, title_field)
+        url     = self._get_nested_field(item, url_field)
+        summary = self._get_nested_field(item, summary_field) if summary_field else None
         content = self._get_nested_field(item, content_field)
-        author = self._get_nested_field(item, author_field)
+        author  = self._get_nested_field(item, author_field)
         date_str = self._get_nested_field(item, date_field)
-        image = self._get_nested_field(item, image_field)
+        image   = self._get_nested_field(item, image_field)
 
         # 提取所有图片列表（支持 "media[type=image].url" 语法）
         images_list = None
@@ -854,7 +856,7 @@ class CrawlerEngine:
             rule_id=self.rule.id,
             url=url,
             title=title,
-            summary=content[:500] if content else None,
+            summary=summary or (content[:500] if content else None),
             author=author,
             publish_time=self._parse_date(date_str),
             cover_image=image,
