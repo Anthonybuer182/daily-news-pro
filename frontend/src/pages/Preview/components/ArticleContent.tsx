@@ -1,5 +1,6 @@
-import { Typography, Button } from 'antd'
-import { ExportOutlined } from '@ant-design/icons'
+import { useState, useEffect } from 'react'
+import { Typography, Button, Image } from 'antd'
+import { ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 
 const { Title, Text } = Typography
@@ -10,8 +11,9 @@ interface ArticleContentProps {
   publish_time?: string
   content: string
   cover_image?: string
+  images?: string[]
   tags?: string[]
-  url?: string  // 原文链接
+  url?: string
 }
 
 export default function ArticleContent({
@@ -20,9 +22,29 @@ export default function ArticleContent({
   publish_time,
   content,
   cover_image,
+  images,
   tags,
   url
 }: ArticleContentProps) {
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [previewVisible, setPreviewVisible] = useState(false)
+
+  // 合并图片列表：优先用 images，fallback 到 cover_image
+  const allImages = (images && images.length > 0)
+    ? images
+    : (cover_image ? [cover_image] : [])
+
+  // images / cover_image 变化时重置索引，防止越界
+  useEffect(() => {
+    setCurrentIdx(0)
+  }, [images, cover_image])
+
+  const hasBanner = allImages.length > 0
+  const hasMultiple = allImages.length > 1
+
+  const prev = () => setCurrentIdx(i => (i - 1 + allImages.length) % allImages.length)
+  const next = () => setCurrentIdx(i => (i + 1) % allImages.length)
+
   return (
     <article style={{
       maxWidth: 800,
@@ -99,19 +121,93 @@ export default function ArticleContent({
         </div>
       )}
 
-      {/* Cover Image */}
-      {cover_image && (
-        <img
-          src={cover_image}
-          alt={title}
-          style={{
-            width: '100%',
-            maxHeight: 400,
-            objectFit: 'cover',
-            borderRadius: 12,
-            marginBottom: 32
-          }}
-        />
+      {/* Image Banner / Carousel */}
+      {hasBanner && (
+        <div style={{ position: 'relative', marginBottom: 32, borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+          {/* 隐藏的 Image.PreviewGroup 用于点击放大 */}
+          <Image.PreviewGroup
+            preview={{ visible: previewVisible, onVisibleChange: setPreviewVisible, current: currentIdx }}
+          >
+            {allImages.map((src, i) => (
+              <Image key={i} src={src} style={{ display: 'none' }} />
+            ))}
+          </Image.PreviewGroup>
+
+          {/* 当前图片 */}
+          <img
+            src={allImages[currentIdx]}
+            alt={`${title} - ${currentIdx + 1}`}
+            onClick={() => setPreviewVisible(true)}
+            style={{
+              width: '100%',
+              maxHeight: 440,
+              objectFit: 'cover',
+              display: 'block',
+              cursor: 'zoom-in',
+            }}
+          />
+
+          {/* 左右切换按钮（多图时才显示）*/}
+          {hasMultiple && (
+            <>
+              <button
+                onClick={prev}
+                style={{
+                  position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: '50%',
+                  width: 36, height: 36, cursor: 'pointer', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                <LeftOutlined />
+              </button>
+              <button
+                onClick={next}
+                style={{
+                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: '50%',
+                  width: 36, height: 36, cursor: 'pointer', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                <RightOutlined />
+              </button>
+
+              {/* 圆点指示器 */}
+              <div style={{
+                position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', gap: 6,
+              }}>
+                {allImages.map((_, i) => (
+                  <span
+                    key={i}
+                    onClick={() => setCurrentIdx(i)}
+                    style={{
+                      width: i === currentIdx ? 20 : 8,
+                      height: 8,
+                      borderRadius: 4,
+                      background: i === currentIdx ? '#fff' : 'rgba(255,255,255,0.5)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* 图片计数 */}
+              <div style={{
+                position: 'absolute', top: 12, right: 12,
+                background: 'rgba(0,0,0,0.45)', color: '#fff',
+                fontSize: 12, padding: '2px 8px', borderRadius: 10,
+                backdropFilter: 'blur(4px)',
+              }}>
+                {currentIdx + 1} / {allImages.length}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Article Body */}

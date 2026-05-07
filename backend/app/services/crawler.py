@@ -179,10 +179,6 @@ class CrawlerEngine:
         # 尝试直接获取属性
         return item.get(field)
 
-    def _get_field_mapping(self) -> Dict:
-        """获取字段映射配置（从 extract_config.mapping 读取）"""
-        return self._get_extract_config().get("mapping", {})
-
     def _get_extract_config(self) -> Dict:
         """获取 Playwright 提取配置"""
         if not self.rule.extract_config:
@@ -412,7 +408,7 @@ class CrawlerEngine:
     async def _parse_json_response(self, response) -> Dict:
         """解析 JSON 响应"""
         data = response.json()
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
 
         # 处理返回数据
         items = data
@@ -458,7 +454,7 @@ class CrawlerEngine:
             self._log("warning", "No items found in RSS feed")
             return {"total": 0, "success": 0, "failed": 0}
 
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
         success_count = 0
         failed_count = 0
 
@@ -516,6 +512,9 @@ class CrawlerEngine:
         - {"data": [...]}  # 直接 data 数组
         """
         if not isinstance(data, dict):
+            # 顶层直接是数组（如某些 REST API）
+            if isinstance(data, list):
+                return data
             return [data]
 
         # 1. 尝试直接获取 items
@@ -558,7 +557,6 @@ class CrawlerEngine:
         """解析 JSON 响应（文本版本）"""
         import json
         data = json.loads(text)
-        field_mapping = self._get_field_mapping()
 
         # 处理返回数据
         items = self._extract_items_from_response(data)
@@ -569,7 +567,8 @@ class CrawlerEngine:
             items = items[:max_items]
             self._log("info", f"Limited to {max_items} items")
 
-        self._log("info", f"Extracted {len(items)} items, first item keys: {list(items[0].keys()) if items else 'none'}")
+        first_keys = list(items[0].keys()) if items and isinstance(items[0], dict) else str(type(items[0])) if items else 'none'
+        self._log("info", f"Extracted {len(items)} items, first item keys: {first_keys}")
 
         # 检查是否需要使用浏览器抓取详情页（混合模式）
         detail_config = extract_config.get("detail", {})
@@ -584,7 +583,7 @@ class CrawlerEngine:
 
     async def _parse_json_standard(self, items, extract_config: Dict) -> Dict:
         """标准 JSON 解析 - 直接从 API 响应提取内容"""
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
         success_count = 0
         failed_count = 0
 
@@ -607,7 +606,7 @@ class CrawlerEngine:
 
     async def _parse_json_with_browser_detail(self, items, extract_config: Dict) -> Dict:
         """混合模式：HTTP 列表 + Browser 详情页抓取"""
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
         detail_config = extract_config.get("detail", {})
 
         # 第一阶段：提取列表项并保存为 pending 状态
@@ -620,12 +619,21 @@ class CrawlerEngine:
                 author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
                 date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at")
                 image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
+                images_spec = field_mapping.get("images")
 
                 title = self._get_nested_field(item, title_field)
                 url = self._get_nested_field(item, url_field)
                 author = self._get_nested_field(item, author_field)
                 date_str = self._get_nested_field(item, date_field)
                 image = self._get_nested_field(item, image_field)
+
+                images_list = None
+                if images_spec and "[" in images_spec:
+                    images_list = self._extract_field_list(item, images_spec)
+                elif image:
+                    images_list = [image]
+                if images_list:
+                    image = images_list[0]
 
                 if not url:
                     continue
@@ -644,6 +652,7 @@ class CrawlerEngine:
                     author=author,
                     publish_time=self._parse_date(date_str) if date_str else None,
                     cover_image=image,
+                    images=json.dumps(images_list, ensure_ascii=False) if images_list else None,
                     status="pending",
                 )
                 self.db.add(article)
@@ -691,7 +700,7 @@ class CrawlerEngine:
 
     async def _parse_xml_standard(self, items, extract_config: Dict) -> Dict:
         """标准 XML 解析 - 直接从 RSS 提取内容"""
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
         success_count = 0
         failed_count = 0
 
@@ -716,7 +725,7 @@ class CrawlerEngine:
         """混合模式：HTTP 列表 + Browser 详情页抓取"""
         from bs4 import BeautifulSoup
 
-        field_mapping = self._get_field_mapping()
+        field_mapping = self._get_list_config().get("fields", {})
         detail_config = extract_config.get("detail", {})
 
         # 第一阶段：提取列表项并保存为 pending 状态
@@ -800,6 +809,7 @@ class CrawlerEngine:
         author_field = field_mapping.get("author", "author") or field_mapping.get("owner", "owner")
         date_field = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
         image_field = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
+        images_spec = field_mapping.get("images")
 
         # 提取字段
         title = self._get_nested_field(item, title_field)
@@ -808,6 +818,17 @@ class CrawlerEngine:
         author = self._get_nested_field(item, author_field)
         date_str = self._get_nested_field(item, date_field)
         image = self._get_nested_field(item, image_field)
+
+        # 提取所有图片列表（支持 "media[type=image].url" 语法）
+        images_list = None
+        if images_spec and "[" in images_spec:
+            images_list = self._extract_field_list(item, images_spec)
+        elif image:
+            # 没有配置 images 但有单图时，统一包装成列表
+            images_list = [image]
+        # cover_image 始终取 images 第一张，保持统一
+        if images_list:
+            image = images_list[0]
 
         if not url:
             return None
@@ -837,6 +858,7 @@ class CrawlerEngine:
             author=author,
             publish_time=self._parse_date(date_str),
             cover_image=image,
+            images=json.dumps(images_list, ensure_ascii=False) if images_list else None,
             markdown_file=markdown_file,
             status="success",
         )
@@ -850,18 +872,52 @@ class CrawlerEngine:
         self._log("info", f"Extracted API article: {title}")
         return article
 
+    def _extract_field_list(self, data: Dict, field_spec: str) -> Optional[List[str]]:
+        """
+        从列表字段中批量提取值，支持过滤语法：
+          "media[].url"           → 取 media 数组每个元素的 url
+          "media[type=image].url" → 只取 type==image 的元素的 url
+        """
+        import re
+        m = re.match(r'^(.+?)\[([^\]]*)\]\.(.+)$', field_spec)
+        if not m:
+            return None
+
+        list_field, filter_expr, extract_field = m.group(1), m.group(2), m.group(3)
+
+        lst = data.get(list_field)
+        if not isinstance(lst, list):
+            return None
+
+        if filter_expr:
+            key, val = filter_expr.split('=', 1)
+            lst = [item for item in lst if isinstance(item, dict) and str(item.get(key, '')) == val]
+
+        result = []
+        for item in lst:
+            if isinstance(item, dict):
+                v = item.get(extract_field)
+                if v:
+                    result.append(str(v))
+
+        return result if result else None
+
     def _get_nested_field(self, data: Dict, field: str) -> Optional[str]:
-        """获取嵌套字段，支持点号分隔的路径"""
+        """获取嵌套字段，支持点号分隔的路径和列表下标（如 media.0.url）"""
         if not field or not data:
             return None
 
-        # 支持嵌套如 "owner.login"
         parts = field.split(".")
         current = data
 
         for part in parts:
             if isinstance(current, dict):
                 current = current.get(part)
+            elif isinstance(current, list):
+                try:
+                    current = current[int(part)]
+                except (ValueError, IndexError):
+                    return None
             else:
                 return None
 
@@ -1303,6 +1359,10 @@ class CrawlerEngine:
                 continue
 
             # 创建新记录（状态为 pending，表示待抓取详情）
+            item_image = item.get('image')
+            item_images = item.get('images')  # 列表项可能已带多图
+            if item_images and not item_image:
+                item_image = item_images[0] if isinstance(item_images, list) else None
             article = Article(
                 rule_id=self.rule.id,
                 url=url,
@@ -1310,8 +1370,9 @@ class CrawlerEngine:
                 summary=item.get('summary', '').strip()[:500] if item.get('summary') else None,
                 author=item.get('author'),
                 publish_time=self._parse_date(item.get('date')) if item.get('date') else None,
-                cover_image=item.get('image'),
-                status="pending",  # 待抓取详情
+                cover_image=item_image,
+                images=json.dumps(item_images, ensure_ascii=False) if isinstance(item_images, list) else None,
+                status="pending",
             )
             self.db.add(article)
             count += 1
@@ -2296,6 +2357,13 @@ class CrawlerEngine:
         """Parse date string"""
         if not date_str:
             return None
+
+        # 优先尝试 ISO 8601（如 2026-04-01T07:01:00Z）
+        try:
+            from datetime import timezone
+            return datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+        except (ValueError, AttributeError):
+            pass
 
         formats = [
             "%Y-%m-%d",

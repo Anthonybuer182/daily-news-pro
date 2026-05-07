@@ -27,6 +27,7 @@ class ArticleUpdate(BaseModel):
     author: Optional[str] = None
     publish_time: Optional[datetime] = None
     cover_image: Optional[str] = None
+    images: Optional[List[str]] = None
     markdown_content: Optional[str] = None  # Not stored in DB, used to update markdown file
     status: Optional[str] = None
     error_message: Optional[str] = None
@@ -40,10 +41,21 @@ class Article(ArticleBase):
     rule_render: Optional[str] = None
     rule_name: Optional[str] = None
     tags: Optional[List[str]] = []
+    images: Optional[List[str]] = []
 
     @field_validator('tags', mode='before')
     @classmethod
     def parse_tags(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        return v or []
+
+    @field_validator('images', mode='before')
+    @classmethod
+    def parse_images(cls, v):
         if isinstance(v, str):
             try:
                 return json.loads(v)

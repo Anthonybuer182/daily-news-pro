@@ -11,6 +11,7 @@ interface NewsCardProps {
     title: string
     summary: string
     cover_image: string
+    images?: string[]
     rule_name: string
     created_at: string
     tags: string[]
@@ -47,10 +48,10 @@ export default function NewsCard({ article }: NewsCardProps) {
       >
         {/* Cover Image with Gradient Overlay */}
         <div style={{ position: 'relative', height: 200, overflow: 'hidden' }}>
-          {article.cover_image ? (
+          {(article.cover_image || (article.images && article.images.length > 0)) ? (
             <img
               alt={article.title}
-              src={article.cover_image}
+              src={article.cover_image || article.images![0]}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (

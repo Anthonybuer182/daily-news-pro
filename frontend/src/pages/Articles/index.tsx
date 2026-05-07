@@ -268,6 +268,7 @@ export default function Articles() {
             publish_time={previewArticle.publish_time ? dayjs(previewArticle.publish_time).format('YYYY-MM-DD HH:mm') : undefined}
             content={markdown}
             cover_image={previewArticle.cover_image}
+            images={previewArticle.images || []}
             tags={previewArticle.tags || []}
             url={previewArticle.url}
           />

@@ -71,6 +71,16 @@ export default function ArticleDetail() {
     }
   }
 
+  // 解析 images
+  let images: string[] = [];
+  if (article.images) {
+    try {
+      images = typeof article.images === 'string' ? JSON.parse(article.images) : article.images;
+    } catch {
+      images = [];
+    }
+  }
+
   return (
     <Layout style={{ minHeight: '100vh', background: '#fff' }}>
       <Header style={{
@@ -112,6 +122,7 @@ export default function ArticleDetail() {
             publish_time={article.publish_time}
             content={markdown}
             cover_image={article.cover_image}
+            images={images}
             tags={tags}
           />
         </div>
