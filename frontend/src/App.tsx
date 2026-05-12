@@ -25,7 +25,7 @@ function App() {
           <Layout>
             <Content style={{ margin: '16px', padding: '24px', background: '#fff' }}>
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/preview" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/rules" element={<Rules />} />
                 <Route path="/jobs" element={<Jobs />} />
