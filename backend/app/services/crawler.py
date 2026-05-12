@@ -1585,12 +1585,22 @@ class CrawlerEngine:
                         _h.ignore_images = False  # 保留真实图片（截图/Logo），仅手动去除 badge 噪声
                         _h.body_width = 0
                         raw_content_text = _h.handle(raw_html)
-                        # 只去除 camo badge 图片（base64 编码 URL，纯噪声）
+                        # 去除完整 badge 模式：[![](camo_url)](outer_url) → ''
+                        # html2text 将 <a href="outer"><img src="camo"></a> 转换为此格式
+                        raw_content_text = _re.sub(
+                            r'\[!\[[^\]]*\]\(https://camo\.githubusercontent\.com/[^\)]+\)\]\([^\)]+\)',
+                            '', raw_content_text
+                        )
+                        # 去除裸 camo badge 图片残留：![](camo_url) → ''
                         raw_content_text = _re.sub(
                             r'!\[[^\]]*\]\(https://camo\.githubusercontent\.com/[^\)]+\)',
                             '', raw_content_text
                         )
-                        # 压缩多余空行
+                        # 去除空链接残留：[](url) → ''（badge 清除后的外层链接）
+                        raw_content_text = _re.sub(r'\[\s*\]\([^\)]+\)', '', raw_content_text)
+                        # 将 .mp4 文件名替换为 [视频] 占位符
+                        raw_content_text = _re.sub(r'\b[\w][\w\-\.]*\.mp4\b', '[视频]', raw_content_text)
+                        # 压缩多余空行（badge 清除后可能留下大量空行）
                         raw_content_text = _re.sub(r'\n{3,}', '\n\n', raw_content_text).strip()
                     except ImportError:
                         from bs4 import BeautifulSoup
@@ -2238,11 +2248,28 @@ class CrawlerEngine:
                     # 原始 HTML → Markdown
                     try:
                         import html2text
+                        import re as _re_md
                         h = html2text.HTML2Text()
                         h.ignore_links = False
                         h.ignore_images = False
                         h.body_width = 0
                         text_content = h.handle(raw_source)
+                        # 去除完整 badge 模式：[![](camo_url)](outer_url) → ''
+                        text_content = _re_md.sub(
+                            r'\[!\[[^\]]*\]\(https://camo\.githubusercontent\.com/[^\)]+\)\]\([^\)]+\)',
+                            '', text_content
+                        )
+                        # 去除裸 camo badge 图片残留
+                        text_content = _re_md.sub(
+                            r'!\[[^\]]*\]\(https://camo\.githubusercontent\.com/[^\)]+\)',
+                            '', text_content
+                        )
+                        # 去除空链接残留：[](url) → ''
+                        text_content = _re_md.sub(r'\[\s*\]\([^\)]+\)', '', text_content)
+                        # 将 .mp4 文件名替换为 [视频] 占位符
+                        text_content = _re_md.sub(r'\b[\w][\w\-\.]*\.mp4\b', '[视频]', text_content)
+                        # 压缩多余空行
+                        text_content = _re_md.sub(r'\n{3,}', '\n\n', text_content).strip()
                     except ImportError:
                         from bs4 import BeautifulSoup
                         soup = BeautifulSoup(raw_source, 'html.parser')
