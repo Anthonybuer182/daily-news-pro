@@ -820,7 +820,11 @@ class CrawlerEngine:
         date_field    = field_mapping.get("date", "date") or field_mapping.get("created_at", "created_at") or field_mapping.get("published", "published")
         image_field   = field_mapping.get("image", "image") or field_mapping.get("avatar_url", "avatar_url")
         images_spec   = field_mapping.get("images")
-        extra_spec    = field_mapping.get("extra")  # dict: {显示标签: API字段名}，如 {"投票数": "votesCount"}
+
+        # 保留字段名集合，其余 key 视为自定义扩展字段，直接写入 Markdown
+        _RESERVED = {"title", "url", "link", "html_url", "summary", "content", "body",
+                     "author", "owner", "date", "created_at", "published",
+                     "image", "avatar_url", "images"}
 
         # 提取字段
         title   = self._get_nested_field(item, title_field)
@@ -831,13 +835,14 @@ class CrawlerEngine:
         date_str = self._get_nested_field(item, date_field)
         image   = self._get_nested_field(item, image_field)
 
-        # 提取扩展字段
-        extra_data: Dict = {}
-        if isinstance(extra_spec, dict):
-            for label, api_field in extra_spec.items():
-                val = self._get_nested_field(item, api_field)
-                if val is not None:
-                    extra_data[label] = val
+        # 提取自定义字段（非保留 key，直接映射到同名字段，写入 Markdown）
+        custom_fields: Dict = {}
+        for field_name, api_field in field_mapping.items():
+            if field_name in _RESERVED or not isinstance(api_field, str):
+                continue
+            val = self._get_nested_field(item, api_field)
+            if val is not None:
+                custom_fields[field_name] = val
 
         # 提取所有图片列表（支持 "media[type=image].url" 语法）
         images_list = None
@@ -859,13 +864,14 @@ class CrawlerEngine:
             self._log("info", f"Article already exists: {url}")
             return existing
 
-        # 生成 markdown
+        # 生成 markdown（custom_fields 中的自定义字段会被 _generate_markdown 自动渲染到头部）
         markdown_content = self._generate_markdown({
             "title": title,
             "text": content or "",
             "author": author,
             "date": date_str,
             "image": image,
+            **custom_fields,
         }, url)
         markdown_file = self._save_markdown(markdown_content, url)
 
@@ -879,7 +885,6 @@ class CrawlerEngine:
             publish_time=self._parse_date(date_str),
             cover_image=image,
             images=json.dumps(images_list, ensure_ascii=False) if images_list else None,
-            extra=json.dumps(extra_data, ensure_ascii=False) if extra_data else None,
             markdown_file=markdown_file,
             status="success",
         )
