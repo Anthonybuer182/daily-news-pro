@@ -1641,11 +1641,39 @@ class CrawlerEngine:
             translated_content_text = None
             if translate_content:
                 try:
-                    translated_content_text = await translation_service.translate(
-                        raw_content_text,
+                    # 翻译前用占位符保护所有 Markdown URL，防止 LLM 篡改或幻觉替换
+                    import re as _re2
+                    _url_map: dict = {}
+                    _url_counter = [0]
+
+                    def _protect_url(m):
+                        ph = f"URLPH{_url_counter[0]}"
+                        _url_map[ph] = m.group(1)
+                        _url_counter[0] += 1
+                        return f"({ph})"
+
+                    # 匹配 markdown 链接/图片语法中的 URL: ![alt](URL) 或 [text](URL)
+                    protected_text = _re2.sub(
+                        r'\(([^)\s]+://[^)]+)\)',
+                        _protect_url,
+                        raw_content_text
+                    )
+
+                    translated_protected = await translation_service.translate(
+                        protected_text,
                         target_lang,
                         source_lang,
                         concurrency,
+                    )
+
+                    # 翻译后还原占位符
+                    def _restore_url(m):
+                        return f"({_url_map.get(m.group(1), m.group(1))})"
+
+                    translated_content_text = _re2.sub(
+                        r'\((URLPH\d+)\)',
+                        _restore_url,
+                        translated_protected
                     )
                 except Exception as e:
                     self._log("warning", f"Content translation failed, keeping original: {e}")
@@ -1949,8 +1977,16 @@ class CrawlerEngine:
                 continue
 
             selector = field_config.get("selector")
-            extract_type = field_config.get("type", "text")  # text, html, attribute
+            extract_type = field_config.get("type", "text")  # text, html, attribute, github_readme
             attr = field_config.get("attr", "src")  # for attribute type
+
+            # github_readme / markdown：提取 .markdown-body 作为 HTML，标记 format=markdown
+            if extract_type in ("github_readme", "markdown") and not selector:
+                raw_html = SelectorParser.extract_html_css(html, ".markdown-body")
+                if raw_html:
+                    result[field_name] = raw_html
+                    result["_content_format"] = "markdown"
+                continue
 
             if not selector:
                 continue
