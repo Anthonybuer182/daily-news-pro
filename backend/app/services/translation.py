@@ -152,7 +152,12 @@ class TranslationService:
             async with semaphore:
                 try:
                     user_prompt = self._build_user_prompt(chunk)
-                    result = await self._translate_openai(system_prompt, user_prompt)
+                    if self.api_type == "anthropic":
+                        result = await self._translate_anthropic(system_prompt, user_prompt)
+                    elif self.api_type == "google":
+                        result = await self._translate_google(system_prompt, user_prompt)
+                    else:
+                        result = await self._translate_openai(system_prompt, user_prompt)
                     translated_parts[idx] = result
                 except Exception as e:
                     logger.warning(f"Failed to translate chunk {idx+1}/{total_chunks}: {e}")
@@ -312,11 +317,13 @@ class TranslationService:
         return f"""You are a professional translator. Translate the following text from {source_name} to {target_name}.
 
 Rules:
-1. Preserve the original formatting and line breaks
-2. Keep technical terms, proper nouns, and brand names in their original form
-3. Maintain HTML tags if present (do not translate inside tags)
-4. Provide accurate, natural translations
-5. Only output the translated text, no explanations"""
+1. Preserve ALL Markdown formatting: headings (#), bold (**), italic (*), lists (-, *), tables, blockquotes (>)
+2. Keep code blocks (``` ```) and inline code (` `) completely unchanged — do NOT translate code
+3. Keep image syntax ![alt](url) unchanged — do NOT translate or remove images
+4. Keep link syntax [text](url) — translate the link text but keep URLs unchanged
+5. Keep technical terms, proper nouns, brand names, and CLI commands in their original form
+6. Provide accurate, natural translations
+7. Only output the translated text, no explanations"""
 
     def _build_user_prompt(self, text: str) -> str:
         """Build user prompt with text to translate"""
@@ -337,24 +344,129 @@ Only output the translated text between the delimiters. Do not include the delim
         fields: List[str],
         target_lang: str,
         source_lang: Optional[str] = None,
-        concurrency: int = 3
+        concurrency: int = 3,
+        tag_schema: Optional[List[str]] = None,
+        max_tags: int = 3,
+        generate_tags: bool = False,
     ) -> Dict[str, str]:
         """
-        Translate multiple fields in an article.
-
-        Args:
-            article_data: Dict with fields like 'title', 'summary', 'content'
-            fields: List of field names to translate
-            target_lang: Target language code
-            source_lang: Source language code
-            concurrency: Number of concurrent translation requests (default 3)
-
-        Returns:
-            Dict with translated fields (original fields preserved for non-translated ones)
+        单次 LLM 调用翻译所有字段，若 generate_tags=True 同时打标签。
+        结果中翻译字段同名返回，标签放在 _tags 键下。
+        失败时回退到逐字段顺序翻译（不包含标签）。
         """
-        result = article_data.copy()
+        fields_to_translate = [f for f in fields if f in article_data and article_data[f]]
+        if not fields_to_translate:
+            return article_data.copy()
 
-        # Translate each field
+        effective_tag_schema = tag_schema if (generate_tags and tag_schema) else None
+        try:
+            return await self._translate_fields_batch(
+                article_data, fields_to_translate, target_lang, source_lang,
+                tag_schema=effective_tag_schema, max_tags=max_tags,
+            )
+        except Exception as e:
+            logger.warning(f"Batch translation failed ({e}), falling back to sequential")
+            return await self._translate_fields_sequential(article_data, fields_to_translate, target_lang, source_lang, concurrency)
+
+    async def _translate_fields_batch(
+        self,
+        article_data: Dict[str, str],
+        fields: List[str],
+        target_lang: str,
+        source_lang: Optional[str] = None,
+        tag_schema: Optional[List[str]] = None,
+        max_tags: int = 3,
+    ) -> Dict[str, str]:
+        """单次 LLM 调用翻译所有字段，可选同时生成标签"""
+        import re as _re
+
+        lang_names = {
+            "zh": "Chinese (简体中文)", "en": "English", "ja": "Japanese (日本語)",
+            "ko": "Korean (한국어)", "fr": "French (Français)", "de": "German (Deutsch)",
+            "es": "Spanish (Español)", "ru": "Russian (Русский)", "ar": "Arabic (العربية)",
+        }
+        target_name = lang_names.get(target_lang, target_lang)
+        source_name = lang_names.get(source_lang, source_lang) if source_lang else "auto-detected language"
+
+        to_translate = {f: article_data[f] for f in fields if article_data.get(f)}
+
+        # 根据是否需要打标签构建不同的 prompt
+        if tag_schema:
+            tags_str = ", ".join(f'"{t}"' for t in tag_schema)
+            system_prompt = f"""You are a professional translator and content tagger.
+
+Your tasks:
+1. Translate the given JSON fields from {source_name} to {target_name}
+2. Based on the translated content, select up to {max_tags} tags from the provided tag pool
+
+Rules:
+- Preserve all formatting, line breaks, and markdown syntax in translations
+- Keep technical terms, proper nouns, code blocks, and URLs untouched
+- Tags MUST be chosen from the tag pool only; return an empty array if none fit
+- Return a single valid JSON object, no explanations"""
+
+            # 动态生成返回示例，包含所有实际字段
+            example_fields = {f: "..." for f in to_translate}
+            example_fields["_tags"] = ["tag1", "tag2"]
+            example_json = json.dumps(example_fields, ensure_ascii=False, indent=2)
+
+            user_prompt = f"""Translate these fields to {target_name}, and select tags from the pool below.
+
+Tag pool (pick up to {max_tags}): [{tags_str}]
+
+Input fields to translate:
+{json.dumps(to_translate, ensure_ascii=False, indent=2)}
+
+Return JSON with ALL the same keys as input plus a "_tags" key (do NOT omit any field):
+{example_json}"""
+        else:
+            system_prompt = f"""You are a professional translator. Translate the JSON fields below from {source_name} to {target_name}.
+
+Rules:
+1. Preserve all formatting, line breaks, and markdown syntax
+2. Keep technical terms, proper nouns, code blocks, and URLs untouched
+3. Return a valid JSON object with exactly the same keys as the input
+4. Only output the JSON object, no explanations"""
+
+            user_prompt = f"""Translate these fields to {target_name}. Return JSON only.
+
+Input:
+{json.dumps(to_translate, ensure_ascii=False, indent=2)}"""
+
+        if self.api_type == "anthropic":
+            raw = await self._translate_anthropic(system_prompt, user_prompt)
+        elif self.api_type == "google":
+            raw = await self._translate_google(system_prompt, user_prompt)
+        else:
+            raw = await self._translate_openai(system_prompt, user_prompt)
+
+        # 解析 JSON 结果，去掉可能的 markdown 代码块包裹
+        raw = raw.strip()
+        raw = _re.sub(r'^```(?:json)?\s*', '', raw)
+        raw = _re.sub(r'\s*```$', '', raw)
+        translated = json.loads(raw)
+
+        result = article_data.copy()
+        for f in fields:
+            if f in translated and translated[f]:
+                result[f] = translated[f]
+        # 保留标签结果（如果有）
+        if "_tags" in translated and isinstance(translated["_tags"], list):
+            # 只保留在 tag_schema 中存在的标签
+            valid_tags = [t for t in translated["_tags"] if not tag_schema or t in tag_schema]
+            result["_tags"] = valid_tags[:max_tags]
+        return result
+
+    async def _translate_fields_sequential(
+        self,
+        article_data: Dict[str, str],
+        fields: List[str],
+        target_lang: str,
+        source_lang: Optional[str] = None,
+        concurrency: int = 3,
+    ) -> Dict[str, str]:
+        """兜底：逐字段顺序翻译"""
+        result = article_data.copy()
         for field in fields:
             if field in article_data and article_data[field]:
                 try:
@@ -365,10 +477,7 @@ Only output the translated text between the delimiters. Do not include the delim
                         concurrency
                     )
                 except Exception as e:
-                    # Log error but continue with other fields
                     logger.warning(f"Failed to translate field '{field}': {e}")
-                    # Keep original text on failure
-
         return result
 
 

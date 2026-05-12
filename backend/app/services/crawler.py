@@ -668,6 +668,9 @@ class CrawlerEngine:
         if pending_urls:
             return await self._extract_pending_articles_browser(detail_config)
 
+        self.job.articles_count = len(items)
+        self.job.success_count = 0
+        self.job.failed_count = 0
         return {"total": len(items), "success": 0, "failed": 0}
 
     async def _parse_xml_response_text(self, text: str) -> Dict:
@@ -774,6 +777,9 @@ class CrawlerEngine:
         if pending_urls:
             return await self._extract_pending_articles_browser(detail_config)
 
+        self.job.articles_count = len(items)
+        self.job.success_count = 0
+        self.job.failed_count = 0
         return {"total": len(items), "success": 0, "failed": 0}
 
     async def _parse_markdown_response_text(self, text: str) -> Dict:
@@ -791,6 +797,9 @@ class CrawlerEngine:
         self._log("info", f"Extracted {len(items)} items from markdown")
 
         if not items:
+            self.job.articles_count = 0
+            self.job.success_count = 0
+            self.job.failed_count = 0
             return {"total": 0, "success": 0, "failed": 0}
 
         # 保存列表项
@@ -936,7 +945,10 @@ class CrawlerEngine:
         return str(current) if current is not None else None
 
     async def _extract_pending_articles_http(self, detail_config: Dict) -> Dict:
-        """使用 httpx 抓取 pending 状态的详情页"""
+        """使用 httpx 顺序抓取详情页（翻译阶段并发）
+        注意：抓取必须顺序执行，避免共享 SQLAlchemy session 在 asyncio 并发下的状态问题，
+        同时也防止目标服务器（如 GitHub）的 rate limit。
+        """
         from app.models import Article
         import httpx
 
@@ -953,7 +965,9 @@ class CrawlerEngine:
 
         success_count = 0
         failed_count = 0
+        articles_to_translate = []
 
+        # ── 阶段1：顺序抓取（避免 session 并发问题 & rate limit） ──
         for article in pending_articles:
             try:
                 url = article.url
@@ -966,6 +980,7 @@ class CrawlerEngine:
                     article.status = "failed"
                     article.error_message = "Empty response"
                     failed_count += 1
+                    self.db.commit()
                     continue
 
                 # 提取内容
@@ -995,10 +1010,8 @@ class CrawlerEngine:
                 article.status = "success"
                 self.db.commit()
 
-                # 翻译处理
-                await self._translate_and_update_article(article, content)
-
                 success_count += 1
+                articles_to_translate.append((article, content))
 
             except Exception as e:
                 self._log("error", f"Failed to fetch {article.url}: {e}")
@@ -1006,6 +1019,19 @@ class CrawlerEngine:
                 article.error_message = str(e)
                 self.db.commit()
                 failed_count += 1
+
+        # ── 阶段2：并发翻译（LLM 调用是纯 IO，安全并发） ──
+        if articles_to_translate and self._should_translate():
+            config = self._get_translation_config() or {}
+            max_concurrent = config.get("concurrency", 3)
+            self._log("info", f"Translating {len(articles_to_translate)} articles concurrently (max={max_concurrent})")
+            translate_semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def _translate_one(art, cont):
+                async with translate_semaphore:
+                    await self._translate_and_update_article(art, cont)
+
+            await asyncio.gather(*[_translate_one(a, c) for a, c in articles_to_translate])
 
         self.job.articles_count = len(pending_articles)
         self.job.success_count = success_count
@@ -1018,7 +1044,10 @@ class CrawlerEngine:
         }
 
     async def _extract_pending_articles_browser(self, detail_config: Dict) -> Dict:
-        """使用 Playwright 浏览器抓取 pending 状态的详情页"""
+        """使用 Playwright 浏览器抓取 pending 状态的详情页
+        阶段1：顺序抓取所有页面（Playwright 限制）
+        阶段2：并发翻译所有文章（IO 密集，可并行）
+        """
         from app.models import Article
 
         # 防御性处理：确保 detail_config 是字典
@@ -1045,7 +1074,10 @@ class CrawlerEngine:
 
         success_count = 0
         failed_count = 0
+        # 收集成功抓取的 (article, content) 对，供后续并发翻译
+        articles_to_translate = []
 
+        # ── 阶段1：顺序抓取（Playwright 不支持并发多页） ──
         async with PlaywrightCrawler(
             user_agent=self.rule.user_agent,
             delay_min=self.rule.delay_min,
@@ -1056,7 +1088,6 @@ class CrawlerEngine:
                     url = article.url
                     self._log("info", f"Fetching article detail: {article.title[:50] if article.title else url}...")
 
-                    # 使用 Playwright 抓取页面
                     html = await crawler.fetch(url)
 
                     if not html:
@@ -1069,7 +1100,6 @@ class CrawlerEngine:
                     # 提取内容
                     if detail_config:
                         content = await self._extract_with_config(html, detail_config)
-                        # 如果自定义提取没有返回正文内容，回退到 trafilatura
                         if not content.get("text") and not content.get("content"):
                             content = TrafilaturaExtractor.extract_with_fallback(html)
                     else:
@@ -1094,10 +1124,8 @@ class CrawlerEngine:
                     article.status = "success"
                     self.db.commit()
 
-                    # 翻译处理
-                    await self._translate_and_update_article(article, content)
-
                     success_count += 1
+                    articles_to_translate.append((article, content))
                     self._log("info", f"Extracted article: {article.title[:50] if article.title else url}")
 
                 except Exception as e:
@@ -1106,6 +1134,19 @@ class CrawlerEngine:
                     article.error_message = str(e)
                     self.db.commit()
                     failed_count += 1
+
+        # ── 阶段2：并发翻译（受 concurrency 限制） ──
+        if articles_to_translate and self._should_translate():
+            config = self._get_translation_config() or {}
+            max_concurrent = config.get("concurrency", 3)
+            self._log("info", f"Translating {len(articles_to_translate)} articles concurrently (max={max_concurrent})")
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def _translate_one(art, cont):
+                async with semaphore:
+                    await self._translate_and_update_article(art, cont)
+
+            await asyncio.gather(*[_translate_one(a, c) for a, c in articles_to_translate])
 
         self.job.articles_count = len(pending_articles)
         self.job.success_count = success_count
@@ -1395,10 +1436,9 @@ class CrawlerEngine:
         return count
 
     async def _extract_pending_articles(self, detail_config: Dict, crawler) -> Dict:
-        """抓取 pending 状态的详情页内容"""
+        """抓取 pending 状态的详情页内容（顺序抓取 + 并发翻译）"""
         from app.models import Article
 
-        # 获取所有 pending 的文章
         pending_articles = self.db.query(Article).filter(
             Article.rule_id == self.rule.id,
             Article.status == "pending"
@@ -1412,18 +1452,18 @@ class CrawlerEngine:
 
         success_count = 0
         failed_count = 0
+        articles_to_translate = []
 
+        # ── 阶段1：顺序抓取 ──
         for article in pending_articles:
             try:
                 url = article.url
                 self._log("info", f"Processing article {article.id}: {article.title[:50]}...")
 
-                # 获取详情页内容
                 html = await crawler.fetch(url)
                 self._log("info", f"Fetched HTML for {article.id}, length: {len(html) if html else 0}")
 
                 if not html:
-                    # 降级使用 httpx
                     import httpx
                     headers = {"User-Agent": self.rule.user_agent} if self.rule.user_agent else {}
                     try:
@@ -1446,13 +1486,12 @@ class CrawlerEngine:
                 # 提取内容
                 if detail_config:
                     content = await self._extract_with_config(html, detail_config)
-                    # 如果自定义提取没有返回正文内容，回退到 trafilatura
                     if not content.get("text") and not content.get("content"):
                         content = TrafilaturaExtractor.extract_with_fallback(html)
                 else:
                     content = TrafilaturaExtractor.extract_with_fallback(html)
 
-                # 更新基本信息（如果之前没有）
+                # 更新基本信息
                 if not article.title and content.get("title"):
                     article.title = content.get("title")
                 if not article.summary and content.get("text"):
@@ -1467,21 +1506,12 @@ class CrawlerEngine:
                 # 生成 markdown 并保存
                 markdown_content = self._generate_markdown(content, url, article.title)
                 markdown_file = self._save_markdown(markdown_content, url)
-
                 article.markdown_file = markdown_file
                 article.status = "success"
                 self.db.commit()
 
-                # 翻译处理
-                if self._should_translate():
-                    self._log("info", f"Starting translation for: {article.title}")
-                    try:
-                        await self._translate_article(article, content)
-                        self._log("info", f"Translation completed for: {article.title}")
-                    except Exception as e:
-                        self._log("warning", f"Translation failed for {article.title}: {e}")
-
                 success_count += 1
+                articles_to_translate.append((article, content))
                 self._log("info", f"Extracted article: {article.title}")
 
             except Exception as e:
@@ -1490,6 +1520,19 @@ class CrawlerEngine:
                 article.error_message = str(e)
                 self.db.commit()
                 failed_count += 1
+
+        # ── 阶段2：并发翻译 ──
+        if articles_to_translate and self._should_translate():
+            config = self._get_translation_config() or {}
+            max_concurrent = config.get("concurrency", 3)
+            self._log("info", f"Translating {len(articles_to_translate)} articles concurrently (max={max_concurrent})")
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def _translate_one(art, cont):
+                async with semaphore:
+                    await self._translate_and_update_article(art, cont)
+
+            await asyncio.gather(*[_translate_one(a, c) for a, c in articles_to_translate])
 
         self.job.articles_count = len(pending_articles)
         self.job.success_count = success_count
@@ -1501,98 +1544,12 @@ class CrawlerEngine:
             "failed": failed_count,
         }
 
-    async def _translate_article(self, article, content: Dict) -> None:
-        """翻译文章内容"""
-        self._log("info", f"[TranslateArticle] START for article: {article.title}")
-        config = self._get_translation_config()
-        if not config:
-            self._log("warning", f"No translation config for article: {article.title}")
-            return
-
-        target_lang = config.get("target_lang", "zh")
-        source_lang = config.get("source_lang")
-        fields = config.get("fields", ["title", "summary"])
-        concurrency = config.get("concurrency", 3)
-
-        self._log("info", f"Translation config: target_lang={target_lang}, fields={fields}, concurrency={concurrency}")
-
-        # 准备要翻译的数据
-        article_data = {
-            "title": article.title or "",
-            "summary": article.summary or "",
-        }
-
-        # 获取原文内容用于翻译
-        # 如果有 text 字段直接用，否则如果有 content 字段且 format 是 text，先转换
-        if content.get("text"):
-            article_data["content"] = content.get("text")
-        elif content.get("content"):
-            # content 字段存在但可能是 HTML，检查 format
-            content_format = content.get("_content_format", "text")
-            if content_format == "text":
-                # format 是 text，需要把 HTML 转成纯文本
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(content.get("content"), 'html.parser')
-                article_data["content"] = soup.get_text(separator='\n', strip=True)
-            else:
-                article_data["content"] = content.get("content", "")
-
-        self._log("info", f"Article data for translation: title_len={len(article_data['title'])}, summary_len={len(article_data['summary'])}, content_len={len(article_data.get('content', ''))}")
-
-        # 确定要翻译的字段
-        fields_to_translate = []
-        if "title" in fields:
-            fields_to_translate.append("title")
-
-        # summary: 使用 fields 列表或 translate_summary 布尔值
-        if "summary" in fields:
-            fields_to_translate.append("summary")
-        elif config.get("translate_summary"):
-            fields_to_translate.append("summary")
-
-        # content: 使用 fields 列表或 translate_content 布尔值
-        if "content" in fields:
-            fields_to_translate.append("content")
-        elif config.get("translate_content"):
-            fields_to_translate.append("content")
-
-        self._log("info", f"Fields to translate: {fields_to_translate}")
-
-        if not fields_to_translate:
-            self._log("warning", f"No fields to translate for: {article.title}")
-            return
-
-        # 执行翻译
-        translation_service = get_translation_service_with_config(self.db)
-        translated = await translation_service.translate_fields(
-            article_data,
-            fields_to_translate,
-            target_lang,
-            source_lang,
-            concurrency
-        )
-
-        # 更新文章
-        if "title" in translated and translated["title"]:
-            article.title = translated["title"]
-        if "summary" in translated and translated["summary"]:
-            article.summary = translated["summary"]
-        if "content" in translated and translated["content"]:
-            # 更新 markdown 文件中的内容
-            # 合并原始 content 和翻译后的 content，保持其他字段（如 language, stars, forks）
-            merged_content = {**content, "text": translated["content"]}
-            markdown_content = self._generate_markdown(merged_content, article.url, article.title)
-            markdown_file = self._save_markdown(markdown_content, article.url)
-            article.markdown_file = markdown_file
-
-        self.db.commit()
-        self._log("info", f"Translated article: {article.title} to {target_lang}")
-
-        # 打标签
-        await self._generate_article_tags(article, content, translated)
-
     async def _translate_and_update_article(self, article, content: Dict) -> None:
-        """翻译并更新文章（通用方法）"""
+        """翻译并更新文章（通用方法）
+
+        title/summary 做单次批量 LLM 调用（短文本，可同时打标签）；
+        content 单独走 translate() 全量分块翻译，不截断。
+        """
         if not self._should_translate():
             return
 
@@ -1602,158 +1559,149 @@ class CrawlerEngine:
                 return
 
             target_lang = config.get("target_lang", "zh")
-            source_lang = config.get("source_lang")
+            source_lang = config.get("source_lang") or None
             fields = config.get("fields", ["title", "summary"])
             concurrency = config.get("concurrency", 3)
 
-            # 准备要翻译的数据
-            article_data = {
-                "title": article.title or "",
-                "summary": article.summary or "",
-            }
-
-            # 获取原文内容用于翻译
-            # 如果有 text 字段直接用，否则如果有 content 字段且 format 是 text，先转换
+            # 获取正文原文（翻译前统一转为纯文本/Markdown，避免传入原始 HTML 导致体积膨胀超时）
+            raw_content_text = ""
             if content.get("text"):
-                article_data["content"] = content.get("text")
+                raw_content_text = content.get("text")
             elif content.get("content"):
-                # content 字段存在但可能是 HTML，检查 format
                 content_format = content.get("_content_format", "text")
-                if content_format == "text":
-                    # format 是 text，需要把 HTML 转成纯文本
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(content.get("content"), 'html.parser')
-                    article_data["content"] = soup.get_text(separator='\n', strip=True)
+                raw_html = content.get("content", "")
+                if content_format == "markdown":
+                    # HTML → Markdown，再清除翻译噪声（camo 徽章图片、多余空行）
+                    try:
+                        import html2text as _html2text
+                        import re as _re
+                        _h = _html2text.HTML2Text()
+                        _h.ignore_links = False   # 保留链接（LLM 只翻译文字、保留 URL）
+                        _h.ignore_images = False  # 保留真实图片（截图/Logo），仅手动去除 badge 噪声
+                        _h.body_width = 0
+                        raw_content_text = _h.handle(raw_html)
+                        # 只去除 camo badge 图片（base64 编码 URL，纯噪声）
+                        raw_content_text = _re.sub(
+                            r'!\[[^\]]*\]\(https://camo\.githubusercontent\.com/[^\)]+\)',
+                            '', raw_content_text
+                        )
+                        # 压缩多余空行
+                        raw_content_text = _re.sub(r'\n{3,}', '\n\n', raw_content_text).strip()
+                    except ImportError:
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(raw_html, 'html.parser')
+                        raw_content_text = soup.get_text(separator='\n', strip=True)
                 else:
-                    article_data["content"] = content.get("content", "")
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(raw_html, 'html.parser')
+                    raw_content_text = soup.get_text(separator='\n', strip=True)
 
-            # 确定要翻译的字段
-            fields_to_translate = []
+            # 确定要翻译的字段，content 单独处理
+            batch_fields = []
             if "title" in fields:
-                fields_to_translate.append("title")
-
-            # summary: 使用 fields 列表或 translate_summary 布尔值
-            if "summary" in fields:
-                fields_to_translate.append("summary")
-            elif config.get("translate_summary"):
-                fields_to_translate.append("summary")
-
-            # content: 使用 fields 列表或 translate_content 布尔值
-            if "content" in fields:
-                fields_to_translate.append("content")
-            elif config.get("translate_content"):
-                fields_to_translate.append("content")
-
-            # 执行翻译
-            translation_service = get_translation_service_with_config(self.db)
-            translated = await translation_service.translate_fields(
-                article_data,
-                fields_to_translate,
-                target_lang,
-                source_lang,
-                concurrency
+                batch_fields.append("title")
+            if "summary" in fields or config.get("translate_summary"):
+                batch_fields.append("summary")
+            translate_content = bool(
+                ("content" in fields or config.get("translate_content")) and raw_content_text
             )
 
-            # 更新文章
+            if not batch_fields and not translate_content:
+                return
+
+            # 标签配置（与 title/summary 批量调用合并为单次 LLM）
+            generate_tags = config.get("generate_tags", False)
+            tag_schema = []
+            max_tags = config.get("max_tags", 3)
+            if generate_tags:
+                from app.models.tag import Tag as TagModel
+                tag_schema = [t.name for t in self.db.query(TagModel).all()]
+
+            translation_service = get_translation_service_with_config(self.db)
+
+            # ── 步骤1：批量翻译 title / summary（+ 可选打标签） ──
+            translated: Dict = {}
+            if batch_fields:
+                batch_data = {
+                    "title": article.title or "",
+                    "summary": article.summary or "",
+                }
+                translated = await translation_service.translate_fields(
+                    batch_data,
+                    batch_fields,
+                    target_lang,
+                    source_lang,
+                    concurrency,
+                    tag_schema=tag_schema,
+                    max_tags=max_tags,
+                    generate_tags=generate_tags,
+                )
+
+            # ── 步骤2：全量分块翻译 content（独立调用，不受批量 JSON 大小限制） ──
+            translated_content_text = None
+            if translate_content:
+                try:
+                    translated_content_text = await translation_service.translate(
+                        raw_content_text,
+                        target_lang,
+                        source_lang,
+                        concurrency,
+                    )
+                except Exception as e:
+                    self._log("warning", f"Content translation failed, keeping original: {e}")
+
+            # ── 更新文章字段 ──
             if "title" in translated and translated["title"]:
                 article.title = translated["title"]
             if "summary" in translated and translated["summary"]:
                 article.summary = translated["summary"]
-            if "content" in translated and translated["content"]:
-                # 更新 markdown 文件中的内容
-                # 合并原始 content 和翻译后的 content，保持其他字段
-                merged_content = {**content, "text": translated["content"]}
+            if translated_content_text:
+                # 翻译结果写入 "text" key：_generate_markdown 会优先用 "text"，直接写入不再做格式转换
+                merged_content = {**content, "text": translated_content_text}
                 markdown_content = self._generate_markdown(merged_content, article.url, article.title)
                 markdown_file = self._save_markdown(markdown_content, article.url)
                 article.markdown_file = markdown_file
 
+            # ── 处理标签（已在批量翻译结果中） ──
+            tags_from_translation = translated.get("_tags")
+            if tags_from_translation is not None:
+                article.tags = json.dumps(tags_from_translation, ensure_ascii=False)
+                self._log("info", f"Tags from translation: {tags_from_translation}")
+            elif generate_tags:
+                await self._generate_article_tags(article, content, translated)
+
             self.db.commit()
             self._log("info", f"Translated article: {article.title} to {target_lang}")
-
-            # ===== 新增：打标签 =====
-            await self._generate_article_tags(article, content, translated)
         except Exception as e:
             self._log("warning", f"Translation failed for {article.title}: {e}")
 
     async def _generate_article_tags(self, article, content: Dict, translated: Dict = None) -> None:
-        """为文章生成标签（在翻译完成后调用）"""
-        import json
-        import sys
-        print(f"[TAGS_PRINT1] _generate_article_tags called for: {article.title}", flush=True)
-
-        try:
-            self._log("info", f"[Tags] DEBUG: Entered _generate_article_tags for article: {article.title}")
-            print(f"[TAGS_PRINT2] _log succeeded", flush=True)
-        except Exception as log_e:
-            print(f"[TAGS_PRINT2] _log failed: {log_e}", flush=True)
-            import traceback
-            traceback.print_exc()
-
+        """为文章生成标签（仅作为批量翻译失败时的兜底调用）"""
         config = self._get_translation_config()
-        print(f"[TAGS_PRINT3] config = {config}", flush=True)
-        self._log("info", f"[Tags] DEBUG: config = {config}")
-
-        if not config:
-            self._log("warning", f"[Tags] No translation config for article: {article.title}")
+        if not config or not config.get("generate_tags"):
             return
 
-        # 检查是否启用打标签
-        print(f"[TAGS_PRINT4] About to check generate_tags, config.get('generate_tags') = {config.get('generate_tags')}", flush=True)
-        self._log("info", f"[Tags] DEBUG: generate_tags = {config.get('generate_tags')}")
-        if not config.get("generate_tags"):
-            self._log("info", f"[Tags] generate_tags is not enabled in config for article: {article.title}")
-            return
-
-        print(f"[TAGS_PRINT5] generate_tags is True, continuing...", flush=True)
-        self._log("info", f"[Tags] Starting tag generation for article: {article.title}, config: {config}")
+        self._log("info", f"[Tags] Fallback tag generation for: {article.title}")
         try:
-            # 获取原文 content 前500字
             raw_content = content.get("text") or content.get("content", "")[:500]
-            self._log("info", f"[Tags] raw_content length: {len(raw_content)}")
+            translated_content = translated["content"][:500] if translated and translated.get("content") else None
+            translated_summary = translated.get("summary") if translated else None
 
-            # 获取翻译后的 content 前500字
-            translated_content = None
-            if translated and translated.get("content"):
-                translated_content = translated["content"][:500]
-            self._log("info", f"[Tags] translated_content length: {len(translated_content) if translated_content else 0}")
-
-            # 获取翻译后的 summary
-            translated_summary = None
-            if translated and translated.get("summary"):
-                translated_summary = translated["summary"]
-            self._log("info", f"[Tags] translated_summary length: {len(translated_summary) if translated_summary else 0}")
-
-            self._log("info", f"[Tags] About to call generate_tags_with_config")
-
-            # 调用打标签服务
             from app.services.translation import generate_tags_with_config
-            print(f"[TAGS_PRINT6] About to call generate_tags_with_config, db={self.db}", flush=True)
-            try:
-                tags = await generate_tags_with_config(
-                    db=self.db,
-                    summary=article.summary or "",
-                    content=raw_content,
-                    translated_summary=translated_summary,
-                    translated_content=translated_content,
-                    rule_translation_config=config
-                )
-                print(f"[TAGS_PRINT7] Returned from generate_tags_with_config, tags={tags}", flush=True)
-                self._log("info", f"[Tags] Returned from generate_tags_with_config, tags: {tags}")
-            except Exception as tag_e:
-                print(f"[TAGS_PRINT7] Exception in generate_tags_with_config: {tag_e}", flush=True)
-                import traceback
-                traceback.print_exc()
-                self._log("warning", f"[Tags] Exception in generate_tags_with_config: {tag_e}")
-                tags = []
-
+            tags = await generate_tags_with_config(
+                db=self.db,
+                summary=article.summary or "",
+                content=raw_content,
+                translated_summary=translated_summary,
+                translated_content=translated_content,
+                rule_translation_config=config
+            )
             if tags:
                 article.tags = json.dumps(tags, ensure_ascii=False)
                 self.db.commit()
-                self._log("info", f"[Tags] Generated tags for {article.title}: {tags}")
-            else:
-                self._log("info", f"[Tags] No tags generated for {article.title}")
+                self._log("info", f"[Tags] Fallback tags for {article.title}: {tags}")
         except Exception as e:
-            self._log("warning", f"[Tags] Outer exception in _generate_article_tags: {e}")
+            self._log("warning", f"[Tags] Fallback tag generation failed for {article.title}: {e}")
 
     async def _extract_articles_with_config(self, urls: List[str], detail_config: Dict, crawler) -> Dict:
         """使用配置提取文章内容"""
@@ -1984,6 +1932,9 @@ class CrawlerEngine:
 
         self.db.add(article)
         self.db.commit()
+
+        # 翻译处理
+        await self._translate_and_update_article(article, content)
 
         self._log("info", f"Extracted article: {article.title}")
         return article
@@ -2234,37 +2185,38 @@ class CrawlerEngine:
 
         lines.append("\n---\n\n")
 
-        # 根据配置处理内容格式
-        text_content = content.get("text") or content.get("content")
-        if text_content:
+        # 根据来源选择内容并做格式转换：
+        #   content["text"]    = 已处理好的文本（提取器纯文本 / 翻译后 Markdown），直接使用
+        #   content["content"] = 原始 HTML，需要根据 _content_format 做转换
+        text_content = content.get("text")
+        if not text_content:
+            raw_source = content.get("content", "")
             content_format = content.get("_content_format", "text")
-
-            if content_format == "markdown":
-                # HTML 转换为 markdown（保留图片、链接等）
-                try:
-                    import html2text
-                    h = html2text.HTML2Text()
-                    h.ignore_links = False
-                    h.ignore_images = False
-                    h.body_width = 0
-                    text_content = h.handle(text_content)
-                except ImportError:
+            if raw_source:
+                if content_format == "markdown":
+                    # 原始 HTML → Markdown
+                    try:
+                        import html2text
+                        h = html2text.HTML2Text()
+                        h.ignore_links = False
+                        h.ignore_images = False
+                        h.body_width = 0
+                        text_content = h.handle(raw_source)
+                    except ImportError:
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(raw_source, 'html.parser')
+                        text_content = soup.get_text(separator='\n', strip=True)
+                elif content_format == "html":
+                    text_content = raw_source  # 保持原始 HTML
+                else:
+                    # text / 其他：剥离 HTML 标签
                     from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(text_content, 'html.parser')
+                    soup = BeautifulSoup(raw_source, 'html.parser')
                     text_content = soup.get_text(separator='\n', strip=True)
-            elif content_format == "html":
-                # 保持原始 HTML
-                pass  # 直接使用原始 HTML
-            elif content_format == "text":
-                # 转换为纯文本
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(text_content, 'html.parser')
-                text_content = soup.get_text(separator='\n', strip=True)
-            # else: 使用原始 text_content
 
+        if text_content:
             # 转换相对路径为绝对路径
             text_content = self._convert_relative_paths(text_content, url)
-
             lines.append(text_content)
 
         return "\n".join(lines)
