@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Frontend
     frontend_url: str = "http://localhost:5173"
 
+    # Admin auth - 管理后台密码，建议在 .env 中配置强密码
+    admin_password: str = "admin123"
+    # JWT secret，用于签名 token，建议在 .env 中配置随机字符串
+    secret_key: str = "please-change-this-secret-key-in-production"
+
     class Config:
         env_file = ".env"
 
