@@ -140,7 +140,6 @@ export default function NewsCard({ article }: NewsCardProps) {
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
             lineHeight: 1.4,
-            minHeight: 44
           }}>
             {article.title}
           </h3>

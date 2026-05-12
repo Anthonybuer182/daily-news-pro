@@ -1,8 +1,12 @@
-import { Segmented } from 'antd';
+import { Segmented, Grid } from 'antd';
 import { useFilter } from '../context/FilterContext';
+
+const { useBreakpoint } = Grid;
 
 export default function TimeFilter() {
   const { filter, setFilter } = useFilter();
+  const screens = useBreakpoint();
+  const isMobile = !screens.sm;
 
   const options = [
     { value: '', label: '全部' },
@@ -16,6 +20,7 @@ export default function TimeFilter() {
       value={filter.timeRange}
       onChange={value => setFilter({ ...filter, timeRange: value as '' | 'today' | 'week' | 'month' })}
       options={options}
+      size={isMobile ? 'small' : 'middle'}
     />
   );
 }

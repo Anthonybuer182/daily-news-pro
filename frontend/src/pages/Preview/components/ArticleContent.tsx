@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Typography, Button, Image } from 'antd'
+import { Typography, Button, Image, Grid } from 'antd'
 import { ExportOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
+
+const { useBreakpoint } = Grid
 
 const { Title, Text } = Typography
 
@@ -28,6 +30,8 @@ export default function ArticleContent({
 }: ArticleContentProps) {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [previewVisible, setPreviewVisible] = useState(false)
+  const screens = useBreakpoint()
+  const isMobile = !screens.sm
 
   // 合并图片列表：优先用 images，fallback 到 cover_image
   const allImages = (images && images.length > 0)
@@ -49,15 +53,15 @@ export default function ArticleContent({
     <article style={{
       maxWidth: 800,
       margin: '0 auto',
-      padding: '0 16px 60px'
+      padding: isMobile ? '0 0 40px' : '0 16px 60px'
     }}>
       {/* Title */}
       <Title
         level={1}
         style={{
-          fontSize: 36,
+          fontSize: isMobile ? 22 : 36,
           fontWeight: 700,
-          marginBottom: 16,
+          marginBottom: 12,
           color: 'rgba(0,0,0,0.88)',
           lineHeight: 1.3
         }}

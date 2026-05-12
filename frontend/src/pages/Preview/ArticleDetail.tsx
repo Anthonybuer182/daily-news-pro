@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout, Button, Tooltip, Spin, message } from 'antd';
+import { Layout, Button, Tooltip, Spin, message, Grid } from 'antd';
 import { ArrowLeftOutlined, LinkOutlined } from '@ant-design/icons';
+
+const { useBreakpoint } = Grid;
 import { getArticle, getArticleMarkdown } from '../../api';
 import ArticleContent from './components/ArticleContent';
 
@@ -13,6 +15,8 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState<any>(null);
   const [markdown, setMarkdown] = useState('');
   const [loading, setLoading] = useState(true);
+  const screens = useBreakpoint();
+  const isMobile = !screens.sm;
 
   useEffect(() => {
     if (!id) return;
@@ -88,17 +92,18 @@ export default function ArticleDetail() {
         alignItems: 'center',
         justifyContent: 'space-between',
         background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-        padding: '0 24px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+        padding: isMobile ? '0 12px' : '0 24px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        height: isMobile ? 52 : 64,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate('/preview')}
-            style={{ color: '#fff' }}
+            style={{ color: '#fff', paddingLeft: isMobile ? 0 : undefined }}
           >
-            返回
+            {isMobile ? '' : '返回'}
           </Button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -114,8 +119,12 @@ export default function ArticleDetail() {
           )}
         </div>
       </Header>
-      <Content style={{ padding: '24px 0' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: '16px' }}>
+      <Content style={{ padding: isMobile ? '16px 0' : '24px 0' }}>
+        <div style={{
+          maxWidth: 800,
+          margin: '0 auto',
+          padding: isMobile ? '0 16px' : '0 16px',
+        }}>
           <ArticleContent
             title={article.title}
             author={article.author}
