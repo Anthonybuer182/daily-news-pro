@@ -7,7 +7,6 @@ from app.models import Rule, Job, Channel, Article
 from app.services.crawler import CrawlerEngine
 from app.services.http_sender import HttpSender
 from datetime import datetime, timezone
-import asyncio
 
 
 class CrawlScheduler:
@@ -69,8 +68,8 @@ class CrawlScheduler:
                 job_id = f"push_{schedule_time.replace(':', '_')}"
 
                 def make_push_job(channel_ids):
-                    def push_job():
-                        asyncio.create_task(self._run_scheduled_push(channel_ids))
+                    async def push_job():
+                        await self._run_scheduled_push(channel_ids)
                     return push_job
 
                 self.scheduler.add_job(
@@ -102,8 +101,8 @@ class CrawlScheduler:
 
         job_id = f"rule_{rule.id}"
 
-        def run_crawl():
-            asyncio.create_task(self._run_crawl(rule.id))
+        async def run_crawl():
+            await self._run_crawl(rule.id)
 
         self.scheduler.add_job(
             run_crawl,
