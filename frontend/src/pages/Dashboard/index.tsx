@@ -19,21 +19,22 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [rulesRes, jobsRes] = await Promise.all([
+      const [rulesRes, jobsRes, articlesRes] = await Promise.all([
         getRules(),
         getJobs({ limit: 5 }),
+        getArticles({ limit: 1 }),
       ])
-      await getArticles({ limit: 1 })
 
       const rules = rulesRes.data
       const jobs = jobsRes.data
+      const articlesCount = parseInt(articlesRes.headers['x-total-count'] || '0', 10)
 
       const successJobs = jobs.filter((j: any) => j.status === 'success').length
       const successRate = jobs.length > 0 ? Math.round((successJobs / jobs.length) * 100) : 0
 
       setStats({
         rulesCount: rules.length,
-        articlesCount: rules.reduce((acc: number, r: any) => acc + (r.articles?.length || 0), 0),
+        articlesCount,
         jobsCount: jobs.length,
         successRate,
       })
