@@ -1,11 +1,9 @@
 import asyncio
 import re
 from typing import Optional, List, Dict
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.database import get_db
 from app.services.playwright_crawler import PlaywrightCrawler
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
@@ -29,7 +27,7 @@ class TestUrlResponse(BaseModel):
 
 
 @router.post("/test-url", response_model=TestUrlResponse)
-async def test_url(request: TestUrlRequest, db: Session = Depends(get_db)):
+async def test_url(request: TestUrlRequest):
     """Test a URL and auto-detect the best way to crawl it"""
 
     # Auto-detect method
@@ -120,7 +118,6 @@ def _extract_links(html: str, base_url: str, selector: Optional[str], selector_t
             links = []
     else:
         # Auto-extract links
-        import re
         from bs4 import BeautifulSoup
 
         # Check if it's RSS/XML

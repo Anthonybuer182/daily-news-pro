@@ -180,8 +180,6 @@ class APIStrategy(BaseStrategy):
             return False
 
     def extract_list(self, content: str, config: dict) -> List[dict]:
-        import json
-
         data = json.loads(content)
         api_config = config.get("api", {})
         items_path = api_config.get("items_path", "data")

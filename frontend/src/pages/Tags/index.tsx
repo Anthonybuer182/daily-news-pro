@@ -12,7 +12,6 @@ export default function Tags() {
   const [tags, setTags] = useState<TagItem[]>([])
   const [loading, setLoading] = useState(false)
 
-  // 编辑相关
   const [modalVisible, setModalVisible] = useState(false)
   const [editingTag, setEditingTag] = useState<TagItem | null>(null)
   const [form] = Form.useForm()
@@ -33,21 +32,18 @@ export default function Tags() {
     }
   }
 
-  // 添加标签
   const handleAdd = () => {
     setEditingTag(null)
     form.resetFields()
     setModalVisible(true)
   }
 
-  // 编辑标签
   const handleEdit = (record: TagItem) => {
     setEditingTag(record)
     form.setFieldsValue({ name: record.name })
     setModalVisible(true)
   }
 
-  // 删除标签
   const handleDelete = async (id: number) => {
     try {
       await deleteTag(id)
@@ -58,7 +54,6 @@ export default function Tags() {
     }
   }
 
-  // 保存标签
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
@@ -76,7 +71,6 @@ export default function Tags() {
     }
   }
 
-  // 批量添加标签
   const handleBatchAdd = async () => {
     Modal.confirm({
       title: '批量添加标签',
@@ -160,7 +154,6 @@ export default function Tags() {
         </ul>
       </Card>
 
-      {/* 添加/编辑标签弹窗 */}
       <Modal
         title={editingTag ? '编辑标签' : '添加标签'}
         open={modalVisible}
