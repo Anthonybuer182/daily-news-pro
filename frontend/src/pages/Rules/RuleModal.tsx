@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox, Switch, Divider } from 'antd'
+import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox, Switch, Divider, Tooltip } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
 import { createRule, updateRule, getRuleEffectiveTagSchema, getTags } from '../../api'
 
 const { TextArea } = Input
@@ -324,6 +325,94 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     setContentType(value)
   }
 
+  const applyExtractTemplate = () => {
+    let tpl: object
+
+    if (render === 'dynamic') {
+      tpl = {
+        list: {
+          selector: 'article a, .news-item a',
+          wait_for: '.news-list, article',
+          url_filters: { exclude: ['/tag/', '/category/', '/page/'] },
+        },
+        detail: {
+          fetch_mode: 'dynamic',
+          wait_for: 'article, .post-body',
+          fields: {
+            title: { selector: 'h1', type: 'text' },
+            summary: { selector: '.summary, .description, meta[name="description"]', attr: 'content', type: 'text' },
+            content: { selector: 'article, .post-body, .entry-content', type: 'html' },
+            author: { selector: '.author, .byline', type: 'text' },
+            published_at: { selector: 'time, .publish-date', attr: 'datetime', type: 'text' },
+          },
+        },
+      }
+    } else if (contentType === 'xml') {
+      tpl = {
+        list: {
+          item_selector: 'item, entry',
+          fields: {
+            title: { selector: 'title', type: 'text' },
+            summary: { selector: 'description, summary', type: 'text' },
+            content: { selector: 'content, encoded', type: 'html' },
+            link: { selector: 'link', type: 'text' },
+            published_at: { selector: 'pubDate, published, updated', type: 'text' },
+          },
+        },
+      }
+    } else if (contentType === 'json') {
+      tpl = {
+        list: {
+          json_path: '$.data.list[*]',
+          url_field: 'url',
+          fields: {
+            title: { json_path: '$.title' },
+            summary: { json_path: '$.summary' },
+            content: { json_path: '$.content' },
+            author: { json_path: '$.author.name' },
+            published_at: { json_path: '$.created_at' },
+          },
+        },
+      }
+    } else if (contentType === 'markdown' || contentType === 'text') {
+      tpl = {
+        list: {
+          selector: 'a[href]',
+          url_filters: { exclude: ['/tag/', '/category/'] },
+        },
+        detail: {
+          fields: {
+            title: { selector: 'h1', type: 'text' },
+            content: { selector: 'body', type: 'text' },
+          },
+        },
+      }
+    } else {
+      // static + html
+      tpl = {
+        list: {
+          selector: 'article a, .news-item a, h2 a',
+          url_filters: { exclude: ['/tag/', '/category/', '/page/'] },
+        },
+        detail: {
+          fields: {
+            title: { selector: 'h1', type: 'text' },
+            summary: { selector: '.summary, .description, meta[name="description"]', attr: 'content', type: 'text' },
+            content: { selector: 'article, .post-body, .entry-content', type: 'html' },
+            author: { selector: '.author, .byline', type: 'text' },
+            published_at: { selector: 'time, .publish-date', attr: 'datetime', type: 'text' },
+          },
+        },
+      }
+    }
+
+    const current = form.getFieldValue('extract_config_display')
+    if (current && current.trim()) {
+      if (!window.confirm('当前已有配置内容，确定要覆盖为模板吗？')) return
+    }
+    form.setFieldValue('extract_config_display', JSON.stringify(tpl, null, 2))
+  }
+
   return (
     <Modal
       title={rule ? '编辑规则' : '新建规则'}
@@ -335,16 +424,16 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
     >
       <Form form={form} layout="vertical">
         {/* ── 基本信息 ── */}
-        <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
+        <Form.Item name="name" label="规则名称" tooltip="为规则设置一个便于识别的名称" rules={[{ required: true, message: '请输入规则名称' }]}>
           <Input placeholder="给规则起个名字，如：科技新闻头条" />
         </Form.Item>
 
-        <Form.Item name="source_url" label="来源 URL" rules={[{ required: true, message: '请输入来源 URL' }]}>
+        <Form.Item name="source_url" label="来源 URL" tooltip="新闻列表页的网址，爬虫将从此页面抓取文章链接" rules={[{ required: true, message: '请输入来源 URL' }]}>
           <Input placeholder="https://example.com/news" />
         </Form.Item>
 
         {/* ── 抓取方式 ── */}
-        <Form.Item label="抓取方式" required>
+        <Form.Item label="抓取方式" required tooltip="静态抓取速度快，适合普通 HTML/RSS/JSON；动态抓取通过浏览器渲染，适合需要 JavaScript 才能加载内容的页面">
           <Segmented
             options={RENDER_OPTIONS}
             value={render}
@@ -352,7 +441,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        <Form.Item label="内容格式" required>
+        <Form.Item label="内容格式" required tooltip="指定来源页面返回的数据格式，静态模式下支持 HTML/XML/JSON/Markdown 等多种格式，动态模式仅支持 HTML">
           <Segmented
             options={render === 'static' ? CONTENT_TYPE_OPTIONS : [{ label: 'HTML', value: 'html' }]}
             value={contentType}
@@ -360,20 +449,32 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
           />
         </Form.Item>
 
-        <Form.Item name="max_items" label="最大抓取数量">
+        <Form.Item name="max_items" label="最大抓取数量" tooltip="每次执行时最多抓取的文章条数，建议 10-50 条，过大可能导致抓取超时">
           <InputNumber min={1} max={500} />
         </Form.Item>
 
         {/* ── 提取配置（选择器、字段映射等） ── */}
         <Form.Item
           name="extract_config_display"
-          label="提取配置 (JSON)"
+          label={
+            <Space size={4}>
+              <span>提取配置 (JSON)</span>
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                onClick={applyExtractTemplate}
+              >
+                使用{render === 'dynamic' ? '动态' : contentType === 'xml' ? 'RSS/XML' : contentType === 'json' ? 'JSON API' : contentType === 'markdown' ? 'Markdown' : contentType === 'text' ? '纯文本' : '静态 HTML'}模板
+              </Button>
+            </Space>
+          }
           tooltip="配置列表项选择器、详情页字段提取等。URL/抓取方式/内容格式/请求配置由上方表单管理，无需在此重复填写。"
         >
           <TextArea
             rows={10}
             style={{ fontFamily: 'monospace' }}
-            placeholder={`{\n  "list": {\n    "selector": "article a",\n    "url_filters": {"exclude": ["/tag/"]}\n  },\n  "detail": {\n    "fetch_mode": "dynamic",\n    "fields": {\n      "title": {"selector": "h1", "type": "text"},\n      "content": {"selector": "article", "type": "html"}\n    }\n  }\n}`}
+            placeholder={`{\n  "list": {\n    "selector": "article a",\n    "url_filters": {"exclude": ["/tag/"]}\n  },\n  "detail": {\n    "fields": {\n      "title": {"selector": "h1", "type": "text"},\n      "content": {"selector": "article", "type": "html"}\n    }\n  }\n}`}
           />
         </Form.Item>
 
@@ -392,7 +493,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
               />
             </Form.Item>
 
-            <Form.Item label="认证类型">
+            <Form.Item label="认证类型" tooltip="访问目标 URL 时所需的认证方式，无认证则留空">
               <Select
                 value={authType}
                 onChange={(value) => { setAuthType(value); setAuthConfigValue(null) }}
@@ -405,7 +506,7 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
               />
             </Form.Item>
 
-            <Form.Item label="认证配置">
+            <Form.Item label="认证配置" tooltip="填写对应认证方式所需的账号密码或 Token 等凭据">
               <AuthConfigForm
                 authType={authType}
                 value={authConfigValue}
@@ -416,28 +517,28 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
         )}
 
         {/* ── 定时与调度 ── */}
-        <Form.Item name="status" label="规则状态">
+        <Form.Item name="status" label="规则状态" tooltip="启用后规则将按定时表达式自动执行；禁用则暂停调度，可随时重新启用">
           <Select options={[{ label: '禁用', value: 'disabled' }, { label: '启用', value: 'enabled' }]} />
         </Form.Item>
 
-        <Form.Item name="cron_expression" label="定时表达式">
+        <Form.Item name="cron_expression" label="定时表达式" tooltip='Cron 格式调度表达式，例如 "0 8 * * *" 表示每天早上 8 点执行，留空则不自动调度'>
           <Input placeholder="0 8 * * *" />
         </Form.Item>
 
         {/* ── 网络配置 ── */}
-        <Form.Item name="delay_min" label="最小延迟(秒)">
+        <Form.Item name="delay_min" label="最小延迟(秒)" tooltip="每条文章请求之间的最小等待时间（秒），用于控制抓取频率，防止触发目标网站的限流">
           <InputNumber min={0} />
         </Form.Item>
 
-        <Form.Item name="delay_max" label="最大延迟(秒)">
+        <Form.Item name="delay_max" label="最大延迟(秒)" tooltip="每条文章请求之间的最大等待时间（秒），实际延迟将在最小值到最大值之间随机取值，模拟人类访问">
           <InputNumber min={0} />
         </Form.Item>
 
-        <Form.Item name="user_agent" label="User-Agent">
+        <Form.Item name="user_agent" label="User-Agent" tooltip="请求时携带的浏览器标识字符串，留空则使用系统默认值，可自定义以绕过某些 UA 检测">
           <Input placeholder="不设置则使用浏览器默认UA" />
         </Form.Item>
 
-        <Form.Item name="proxy_config" label="代理配置">
+        <Form.Item name="proxy_config" label="代理配置" tooltip='通过代理服务器发起请求，格式示例：{"server": "http://host:port"}，支持 HTTP/SOCKS 协议'>
           <TextArea
             rows={2}
             placeholder='{"server": "http://proxy:8080"}'
@@ -472,7 +573,12 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                   options={TRANSLATION_FIELD_OPTIONS}
                 />
                 <Space>
-                  <span>并发数：</span>
+                  <Space size={4}>
+                    <span>并发数</span>
+                    <Tooltip title="同时翻译的文章数量，数值越大速度越快，但可能超过 AI 接口的速率限制导致报错">
+                      <QuestionCircleOutlined style={{ color: '#00000073', fontSize: 14, cursor: 'help' }} />
+                    </Tooltip>
+                  </Space>
                   <InputNumber
                     min={1} max={10}
                     value={translationFormData.concurrency}
@@ -485,7 +591,12 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                 <Divider style={{ margin: '8px 0' }} />
 
                 <Space>
-                  <span>自动打标签：</span>
+                  <Space size={4}>
+                    <span>自动打标签</span>
+                    <Tooltip title="翻译完成后由 AI 自动为文章打上分类标签，标签来自规则或全局标签库">
+                      <QuestionCircleOutlined style={{ color: '#00000073', fontSize: 14, cursor: 'help' }} />
+                    </Tooltip>
+                  </Space>
                   <Switch
                     checked={translationFormData.generate_tags}
                     onChange={(checked) => setTranslationFormData(prev => ({ ...prev, generate_tags: checked }))}
