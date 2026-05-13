@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space } from 'antd'
+import { Table, Tag, Card, Button, Modal, message, Popconfirm, Form, Input, DatePicker, Space, Tooltip, Typography } from 'antd'
 import { EyeOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined, EditOutlined } from '@ant-design/icons'
 import { getArticles, getArticleMarkdown, batchDeleteArticles, getTags } from '../../api'
 import ArticleContent from '../Preview/components/ArticleContent'
@@ -150,15 +150,29 @@ export default function Articles() {
     { title: '封面', dataIndex: 'cover_image', key: 'cover_image', width: 80,
       render: (v: string) => v ? <img src={v} alt="cover" style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4 }} /> : '-'
     },
-    { title: '标题', dataIndex: 'title', key: 'title', ellipsis: true },
-    { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: true,
-      render: (v: string) => v || '-'
+    { title: '标题', dataIndex: 'title', key: 'title', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{v || '-'}</Typography.Text>
+        </Tooltip>
+      )
+    },
+    { title: '摘要', dataIndex: 'summary', key: 'summary', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v || '-'} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{v || '-'}</Typography.Text>
+        </Tooltip>
+      )
     },
     { title: '抓取方式', dataIndex: 'rule_render', key: 'rule_render',
       render: (v: string) => getRenderTag(v)
     },
-    { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,
-      render: (v: string) => v || '-'
+    { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v || '-'} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{v || '-'}</Typography.Text>
+        </Tooltip>
+      )
     },
     { title: '作者', dataIndex: 'author', key: 'author',
       render: (v: string) => v || '-'
@@ -166,8 +180,15 @@ export default function Articles() {
     { title: '发布时间', dataIndex: 'publish_time', key: 'publish_time',
       render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'
     },
-    { title: '来源', dataIndex: 'url', key: 'url', ellipsis: true,
-      render: (v: string) => <a href={v} target="_blank" rel="noopener noreferrer">{v}</a>
+    { title: '来源', dataIndex: 'url', key: 'url', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <a href={v} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {v}
+          </a>
+        </Tooltip>
+      )
     },
     { title: '状态', dataIndex: 'status', key: 'status',
       render: (status: string) => <Tag color={getStatusColor(status)}>{status}</Tag>

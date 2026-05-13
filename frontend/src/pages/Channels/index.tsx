@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Tag, message, Popconfirm, Form, Input, Switch, Modal, Select, Tabs } from 'antd'
+import { Table, Button, Space, Tag, message, Popconfirm, Form, Input, Switch, Modal, Select, Tabs, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, SendOutlined as SendNowOutlined, SettingOutlined } from '@ant-design/icons'
 import { getChannels, createChannel, updateChannel, deleteChannel, testChannel, sendNow, addChannelWebhook, deleteChannelWebhook } from '../../api'
 
@@ -356,7 +356,16 @@ export default function Channels() {
 
   const expandedRowRender = (record: any) => {
     const webhookColumns = [
-      { title: 'Webhook URL', dataIndex: 'webhook_url', key: 'webhook_url', ellipsis: true },
+      { title: 'Webhook URL', dataIndex: 'webhook_url', key: 'webhook_url', ellipsis: { showTitle: false },
+        render: (v: string) => (
+          <Tooltip title={v} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+            <a href={v} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {v}
+            </a>
+          </Tooltip>
+        )
+      },
       { title: '状态', dataIndex: 'is_enabled', key: 'is_enabled', render: (enabled: boolean) => enabled ? '启用' : '禁用' },
       {
         title: '操作',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Select } from 'antd'
+import { Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Select, Tooltip, Typography } from 'antd'
 import { getModelConfigs, createModelConfig, updateModelConfig, deleteModelConfig, setDefaultModelConfig } from '../../api'
 
 interface ModelConfig {
@@ -102,7 +102,13 @@ export default function ModelConfigs() {
         return map[api_type] || api_type
       }
     },
-    { title: 'API 地址', dataIndex: 'api_base', key: 'api_base', ellipsis: true },
+    { title: 'API 地址', dataIndex: 'api_base', key: 'api_base', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{v || '-'}</Typography.Text>
+        </Tooltip>
+      )
+    },
     { title: '模型', dataIndex: 'model', key: 'model' },
     {
       title: '默认',

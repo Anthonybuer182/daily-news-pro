@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Card, Button, Popconfirm, message, Form, Input, Select, DatePicker, Space } from 'antd'
+import { Table, Tag, Card, Button, Popconfirm, message, Form, Input, Select, DatePicker, Space, Tooltip, Typography } from 'antd'
 import { DeleteOutlined as BatchDeleteOutlined, SearchOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { getJobs, batchDeleteJobs, batchRunJobs } from '../../api'
 import dayjs from 'dayjs'
@@ -105,8 +105,15 @@ export default function Jobs() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: true,
-      render: (v: string, record: any) => v || `规则${record.rule_id}`
+    { title: '规则', dataIndex: 'rule_name', key: 'rule_name', ellipsis: { showTitle: false },
+      render: (v: string, record: any) => {
+        const text = v || `规则${record.rule_id}`
+        return (
+          <Tooltip title={text} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+            <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{text}</Typography.Text>
+          </Tooltip>
+        )
+      }
     },
     { title: '触发类型', dataIndex: 'trigger_type', key: 'trigger_type' },
     { title: '状态', dataIndex: 'status', key: 'status',

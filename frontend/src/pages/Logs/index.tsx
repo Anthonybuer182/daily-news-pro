@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Card, Form, Select, DatePicker, Space, Button, message, Popconfirm } from 'antd'
+import { Table, Tag, Card, Form, Select, DatePicker, Space, Button, message, Popconfirm, Tooltip, Typography } from 'antd'
 import { SearchOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getLogs, getJobs, batchDeleteLogs } from '../../api'
 import dayjs from 'dayjs'
@@ -132,7 +132,16 @@ export default function Logs() {
       title: '消息',
       dataIndex: 'message',
       key: 'message',
-      ellipsis: true
+      ellipsis: { showTitle: false },
+      render: (msg: string) => (
+        <Tooltip
+          title={<pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 300, overflowY: 'auto', fontSize: 12 }}>{msg}</pre>}
+          overlayStyle={{ maxWidth: 480 }}
+          placement="topLeft"
+        >
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{msg}</Typography.Text>
+        </Tooltip>
+      )
     }
   ]
 
@@ -193,6 +202,26 @@ export default function Logs() {
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys as number[]),
+          }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px 12px',
+                background: '#f5f5f5',
+                borderRadius: 4,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                fontSize: 13,
+                lineHeight: '1.6',
+                maxHeight: 400,
+                overflowY: 'auto',
+                color: record.level === 'error' ? '#cf1322' : record.level === 'warning' ? '#d46b08' : '#333'
+              }}>
+                {record.message}
+              </pre>
+            ),
+            rowExpandable: (record) => !!record.message && record.message.length > 60,
           }}
           pagination={{
             current: pagination.current,

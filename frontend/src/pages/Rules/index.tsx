@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Tag, message, Popconfirm, Form, Input, Select } from 'antd'
+import { Table, Button, Space, Tag, message, Popconfirm, Form, Input, Select, Tooltip, Typography } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined as BatchDeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import { getRules, deleteRule, enableRule, disableRule, runRule, batchDeleteRules, batchRunRules } from '../../api'
 import RuleModal from './RuleModal'
@@ -136,13 +136,27 @@ export default function Rules() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: '来源', key: 'source_url', ellipsis: true,
+    { title: '名称', dataIndex: 'name', key: 'name', ellipsis: { showTitle: false },
+      render: (v: string) => (
+        <Tooltip title={v} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+          <Typography.Text ellipsis style={{ maxWidth: '100%' }}>{v || '-'}</Typography.Text>
+        </Tooltip>
+      )
+    },
+    { title: '来源', key: 'source_url', ellipsis: { showTitle: false },
       render: (_: any, record: any) => {
         try {
           const config = record.extract_config ? JSON.parse(record.extract_config) : {}
           const url = config?.list?.url
-          return url ? <a href={url} target="_blank" rel="noopener noreferrer">{url}</a> : '-'
+          if (!url) return '-'
+          return (
+            <Tooltip title={url} placement="topLeft" overlayStyle={{ maxWidth: 480 }}>
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {url}
+              </a>
+            </Tooltip>
+          )
         } catch {
           return '-'
         }
