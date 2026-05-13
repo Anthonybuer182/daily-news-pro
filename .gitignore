@@ -65,6 +65,7 @@ build/
 data/
 data/articles/
 *.md
+!README.md
 
 # Uvicorn
 *.pid
