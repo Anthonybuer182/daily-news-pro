@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal, Form, Input, Select, InputNumber, Segmented, Button, Space, Typography, Checkbox, Switch, Divider } from 'antd'
-import { createRule, updateRule, getRuleEffectiveTagSchema } from '../../api'
+import { createRule, updateRule, getRuleEffectiveTagSchema, getTags } from '../../api'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -234,12 +234,16 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
   })
 
   const fetchEffectiveTagConfig = async () => {
-    if (rule) {
-      try {
+    try {
+      if (rule) {
         const res = await getRuleEffectiveTagSchema(rule.id)
         setEffectiveTagConfig(res.data)
-      } catch { /* ignore */ }
-    }
+      } else {
+        const res = await getTags()
+        const tagNames = (res.data || []).map((t: any) => t.name)
+        setEffectiveTagConfig(prev => ({ ...prev, tag_schema: tagNames }))
+      }
+    } catch { /* ignore */ }
   }
 
   const handleSubmit = async () => {
@@ -492,17 +496,6 @@ export default function RuleModal({ visible, rule, onClose, onSuccess }: RuleMod
                     </Text>
                   )}
                 </Space>
-
-                {translationFormData.generate_tags && (
-                  <div style={{ marginLeft: 24, marginTop: 8 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      标签池：{effectiveTagConfig.tag_schema.length > 0
-                        ? effectiveTagConfig.tag_schema.slice(0, 5).join(', ') + (effectiveTagConfig.tag_schema.length > 5 ? '...' : '')
-                        : '暂无标签，请先在标签管理中添加'
-                      }
-                    </Text>
-                  </div>
-                )}
               </>
             )}
           </Space>
