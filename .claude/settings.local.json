@@ -71,7 +71,11 @@
       "Bash(git rev-parse:*)",
       "mcp__chrome-devtools__list_console_messages",
       "Bash(git worktree:*)",
-      "Skill(ui-ux-pro-max)"
+      "Skill(ui-ux-pro-max)",
+      "Bash(uvicorn:*)",
+      "Bash(ffmpeg:*)",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__fill"
     ]
   },
   "enableAllProjectMcpServers": true,
