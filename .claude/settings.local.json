@@ -75,7 +75,8 @@
       "Bash(uvicorn:*)",
       "Bash(ffmpeg:*)",
       "mcp__chrome-devtools__take_screenshot",
-      "mcp__chrome-devtools__fill"
+      "mcp__chrome-devtools__fill",
+      "Bash(ffprobe:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
