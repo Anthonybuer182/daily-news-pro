@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     # Frontend
     frontend_url: str = "http://localhost:5173"
+    # 前端构建产物目录（生产环境由 FastAPI 托管，指向 frontend/dist；为空则不托管）
+    static_dir: str = ""
 
     # Admin auth - 管理后台密码，建议在 .env 中配置强密码
     admin_password: str = "admin123"
